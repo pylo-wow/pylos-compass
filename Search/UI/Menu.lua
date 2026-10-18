@@ -129,11 +129,16 @@ function ui.ShowMenu(entry, fromDetail, byKey)
         act[#act + 1] = { L["Put on action bar"], function() ui.Pickup(target) end, icon = SymbolOf(target.icon) }
     end
     local link = ui.EntryLink(target)
-    if link then
+    if link and link:find("|H", 1, true) then -- a real hyperlink, not the "item:ID" stand-in of an uncached item
         act[#act + 1] = { L["Link in chat"], function()
             ns.Close()
-            if ChatEdit_GetActiveWindow and ChatEdit_GetActiveWindow() then
-                ChatEdit_InsertLink(link)
+            local chat = rawget(_G, "ChatFrameUtil")
+            if chat and chat.GetActiveWindow and chat.GetActiveWindow() then
+                chat.InsertLink(link)
+            elseif chat and chat.OpenChat then
+                chat.OpenChat(link)
+            elseif ChatEdit_GetActiveWindow and ChatEdit_GetActiveWindow() then
+                ChatEdit_InsertLink(link) -- the old names, removed with the next expansion
             elseif ChatFrame_OpenChat then
                 ChatFrame_OpenChat(link)
             end

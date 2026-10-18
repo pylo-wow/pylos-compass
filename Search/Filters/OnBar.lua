@@ -36,8 +36,10 @@ local function Scan()
     wipe(spellsOnBar)
     wipe(itemsOnBar)
     for slot = 1, 180 do
-        local kind, id = GetActionInfo(slot)
-        if kind == "macro" and id then
+        local kind, id, sub = GetActionInfo(slot)
+        if kind == "macro" and id and sub == "spell" then
+            kind = "spell" -- the client names the spell a macro button shows (id is the spell ID then)
+        elseif kind == "macro" and id then
             local macro = id
             local spellID = GetMacroSpell and GetMacroSpell(macro)
             -- not "GetMacroItem and GetMacroItem(macro)": "and" keeps only the first result (the name)

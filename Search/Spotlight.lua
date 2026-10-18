@@ -108,7 +108,7 @@ ns.data.On("PLAYER_ENTERING_WORLD", function(_, isInitialLogin)
     -- loading screen is still up: build the small sources here, unseen
     ns.index.BuildMissing()
     -- once: default key if neither key nor command is taken
-    if not isInitialLogin or ns.db.defaultKeySet then return end
+    if ns.db.defaultKeySet then return end -- once, also after installing and /reload
     ns.db.defaultKeySet = true
     local taken = GetBindingAction(DEFAULT_KEY)
     if not GetBindingKey(COMMAND) and (taken == nil or taken == "") then

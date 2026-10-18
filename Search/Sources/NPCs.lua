@@ -29,7 +29,7 @@ local TABS = {
 for _, tab in ipairs(TABS) do
     ns.RegisterFilter({
         key = "npcs:" .. tab[1], name = tab[2], icon = "Interface\\Icons\\" .. tab[3],
-        subcategory = true, sources = { "npcs" }, test = tab[4], static = true,
+        subcategory = true, sources = { "npcs" }, test = tab[4], static = tab[1] == "vendors",
     })
 end
 

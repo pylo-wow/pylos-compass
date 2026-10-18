@@ -51,7 +51,7 @@ end
 
 -- Key names as the client reports them ("." and NUMPADPLUS seen in game); a key not listed still
 -- types, it only reaches the game as well.
-local SWALLOW = { "SPACE", "MINUS", ".", ",", "#", "+", "<", "'", "^",
+local SWALLOW = { "SPACE", "MINUS", ".", ",", "#", "+", "<", "'", "^", "/", "=", "[", "]", ";", "\\", "`",
     "NUMPADPLUS", "NUMPADMINUS", "NUMPADMULTIPLY", "NUMPADDIVIDE", "NUMPADDECIMAL",
     "Ä", "Ö", "Ü", "ß" }
 for byte = string.byte("A"), string.byte("Z") do SWALLOW[#SWALLOW + 1] = string.char(byte) end
@@ -138,6 +138,7 @@ repeater:SetScript("OnUpdate", function(self)
         return
     end
     local now = GetTime()
+    if now - heldNext > 3 * REPEAT_RATE then heldNext = now - REPEAT_RATE end -- after a hitch: no burst of presses
     while held and now >= heldNext do
         Press(held, true)
         heldNext = heldNext + REPEAT_RATE
@@ -208,10 +209,16 @@ function input.BindKeys()
     pcall(SetOverrideBindingClick, ns.ui.bar, true, "CTRL-SHIFT-TAB", "PylosCompassKeys", "CTRL-TAB")
 end
 
+local clearPending -- the bindings could not be cleared in combat
 function input.ClearKeys()
     wipe(waiting)
-    if not InCombatLockdown() then ClearOverrideBindings(ns.ui.bar) end
+    if InCombatLockdown() then clearPending = true else ClearOverrideBindings(ns.ui.bar) end
 end
+-- when the fight ends: the keys go back to the game if the bar did not open again meanwhile
+ns.data.On("PLAYER_REGEN_ENABLED", function()
+    if clearPending and not ns.ui.bar:IsShown() then ClearOverrideBindings(ns.ui.bar) end
+    clearPending = false
+end)
 
 -- Without the keyboard (click outside, option "clickOutside"): keys go back to the game, only Escape
 -- still closes; a click into the bar or the search key takes the keyboard back

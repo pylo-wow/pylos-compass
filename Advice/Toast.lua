@@ -83,7 +83,8 @@ local function Build()
         if down or button ~= "LeftButton" or not current then return end
         local action = current.c.action
         if action and action.kind == "waypoint" then W.Waypoint(action.name, action.value) end
-        Answer("clicked")
+        -- a note without an action is only dismissed: that is no sign of interest for the level
+        Answer(action and "clicked" or "dismissed")
     end)
     note.secure = secure
     note:SetScript("OnUpdate", function(self)

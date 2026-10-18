@@ -636,6 +636,7 @@ local function Build()
             W.SetBackground(background)
         end
         -- tooltip waiting for item data: shown when it arrives, or after TOOLTIP_WAIT with what there is
+        if waiting and not waiting.item then waiting = nil end
         if waiting and (C_Item.IsItemDataCachedByID(waiting.item.entry.itemID) or now - waitingSince >= TOOLTIP_WAIT) then
             local row = waiting
             if row:IsVisible() and row.secure:IsMouseOver() then Tooltip(row, true) else waiting = nil end
@@ -666,7 +667,7 @@ end)
 
 -- the minimap button's middle click and the key (Compass.lua)
 function ns.ToggleWindow()
-    if ns.db.adviceOn == false then return end
+    if not ns.db or ns.db.adviceOn == false then return end
     if InCombatLockdown() then
         W.Error(L["The recommendations open after combat."])
         return

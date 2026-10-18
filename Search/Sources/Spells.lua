@@ -77,9 +77,11 @@ source = ns.RegisterSource({
             return { entry.tab, entry.rankNumber and L["Rank %d"]:format(entry.rankNumber) }
         end
         if entry.subtext == nil then
-            entry.subtext = C_Spell.GetSpellSubtext and C_Spell.GetSpellSubtext(entry.spellID) or nil -- nil again until the spell data is loaded
+            -- empty while the spell data is not loaded: asked again until there is a text
+            local text = C_Spell.GetSpellSubtext and C_Spell.GetSpellSubtext(entry.spellID)
+            if text and text ~= "" then entry.subtext = text end
         end
-        return { entry.tab, entry.subtext ~= "" and entry.subtext or nil }
+        return { entry.tab, entry.subtext }
     end,
     -- row state (UI\List.lua): learnable now or from which level; none for a learned spell (its hotkey shows there)
     state = function(entry)

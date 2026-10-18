@@ -196,7 +196,8 @@ ns.RegisterPush({
                     title = L["Rare nearby: %s"]:format(entry.name),
                     text = entry.levelMax > 0 and L["Level %d"]:format(entry.levelMax) or "",
                     -- secure macro, out of combat
-                    action = { kind = "macro", value = "/targetexact " .. entry.name },
+                    -- the data names are English: the macro finds the rare only in the English client
+                    action = GetLocale() == "enUS" and { kind = "macro", value = "/targetexact " .. entry.name } or nil,
                     big = { true, "rare" }, missable = { true, "seen now" }, sure = { true, "seen" },
                 })
             end

@@ -80,6 +80,7 @@ local function Saved()
     local db = ns.db
     if not db then return nil end
     local key = ns.Character()
+    if not key then return nil end
     db.pushes[key] = db.pushes[key] or { at = {}, outcomes = {} }
     return db.pushes[key]
 end
@@ -121,11 +122,19 @@ function push.Moment()
 end
 
 local Evaluate
+local pauseDue, pauseTimer -- when the pause evaluation is due; whether its timer runs
 local function Pause(delay)
-    C_Timer.After(delay or 0, function()
+    pauseDue = math.max(pauseDue or 0, GetTime() + (delay or 0))
+    if pauseTimer then return end
+    local function Fire()
+        local wait = pauseDue - GetTime()
+        if wait > 0.001 then return C_Timer.After(wait, Fire) end
+        pauseTimer, pauseDue = false, nil
         momentUntil = GetTime() + MOMENT
         Evaluate("moment")
-    end)
+    end
+    pauseTimer = true
+    C_Timer.After(delay or 0, Fire)
 end
 ns.On("PLAYER_REGEN_ENABLED", function() Pause(2) end)
 ns.On("LOOT_CLOSED", function() Pause(0.5) end)
@@ -179,13 +188,15 @@ local function New(c)
     if at and time() - at < (c.again or AGAIN) then return false, "nudged before" end
     if laterUntil[c.situation] and time() < laterUntil[c.situation] then return false, "later" end
     local entry = c.entry
-    if entry and not c.anyway then
+    if entry then
         local id = D.EntryID(entry)
         if id and ns.reasons.Hidden(entry, id) then return false, "don't suggest" end
-        local since = id and ns.memory.SinceActed(id)
-        if since and since < JUST_DONE then return false, "just done" end
-        -- another NPC of the same errand counts as done (Reasons.lua Satisfied)
-        if entry.npcID and ns.reasons.Satisfied(id, entry) < 0.5 then return false, "errand done" end
+        if not c.anyway then
+            local since = id and ns.memory.SinceActed(id)
+            if since and since < JUST_DONE then return false, "just done" end
+            -- another NPC of the same errand counts as done (Reasons.lua Satisfied)
+            if entry.npcID and ns.reasons.Satisfied(id, entry) < 0.5 then return false, "errand done" end
+        end
     end
     return true, "yes"
 end
@@ -291,20 +302,25 @@ end
 
 local running = false
 function Evaluate(why)
-    if running or not ns.db or ns.db.push == false or ns.db.adviceOn == false then return end
+    if running or not ns.db or ns.db.push == false or ns.db.adviceOn == false or InCombatLockdown() then return end
     running = true
     local present = {}
     local ok, problem = pcall(function()
         D.RefreshOwned()
         ns.reasons.Refresh() -- rules read current reasons
+    end)
+    if ok then
         for _, rule in ipairs(rules) do
             if Enabled(rule) then
-                rule.candidates(function(c) Decide(rule, c, present) end)
+                local done, err = pcall(rule.candidates, function(c) Decide(rule, c, present) end)
+                if not done then geterrorhandler()(err) end
             end
         end
-        Watch(present)
-        if push.QuietChanged then push.QuietChanged() end
-    end)
+        ok, problem = pcall(function()
+            Watch(present)
+            if push.QuietChanged then push.QuietChanged() end
+        end)
+    end
     running = false
     if not ok then geterrorhandler()(problem) end
 end

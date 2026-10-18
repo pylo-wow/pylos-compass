@@ -129,15 +129,27 @@ function memory.Reset()
     if db then wipe(db.learned) end
 end
 
+-- at most this many entries under a text (and under "", which counts every choice): the strongest stay
+local MAX_PER_TEXT, MAX_FOR_ALL = 40, 1500
+
 function memory.Prune()
     local db = DB()
     if not db then return end
     local now = time()
     for key, bucket in pairs(db.learned) do
-        local left = false
+        local ids = {}
         for id, record in pairs(bucket) do
-            if Value(record, now) < FORGOTTEN then bucket[id] = nil else left = true end
+            if Value(record, now) < FORGOTTEN then bucket[id] = nil else ids[#ids + 1] = id end
         end
-        if not left then db.learned[key] = nil end
+        local limit = key == "" and MAX_FOR_ALL or MAX_PER_TEXT
+        if #ids > limit then
+            table.sort(ids, function(a, b)
+                local va, vb = Value(bucket[a], now), Value(bucket[b], now)
+                if va ~= vb then return va > vb end
+                return tostring(a) < tostring(b)
+            end)
+            for i = limit + 1, #ids do bucket[ids[i]] = nil end
+        end
+        if next(bucket) == nil then db.learned[key] = nil end
     end
 end
