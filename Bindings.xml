@@ -1,0 +1,5 @@
+<Bindings>
+    <!-- Toggle the search bar and the recommendations window (Compass.lua) -->
+    <Binding name="PYLOSCOMPASS" category="Pylos Compass">if PylosCompass.ToggleSearch then PylosCompass.ToggleSearch() end</Binding>
+    <Binding name="PYLOSCOMPASS_WINDOW" category="Pylos Compass">if PylosCompass.ToggleWindow then PylosCompass.ToggleWindow() end</Binding>
+</Bindings>

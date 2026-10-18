@@ -1,0 +1,143 @@
+local ns = select(2, ...).search
+if ns.off then return end
+
+-- The search's memory: what you chose after typing what (PylosCompassDB.learned); Rank.lua
+-- scores it. learned: text -> entry ID -> { value, time, exact }. The text is each prefix of what
+-- was typed (up to 12 characters); exact = 1 under the whole text (only such a choice may pass an
+-- exact name in Rank.lua); "" counts every choice, also without text. A choice adds 1, opening
+-- only its detail view 0.5; values halve every two weeks.
+
+local EachChar = ns.EachChar
+local memory = {}
+ns.memory = memory
+
+local HALF_LIFE = 14 * 86400   -- seconds
+local MAX_LEARNED_LENGTH = 12
+local FORGOTTEN = 0.05         -- values below are dropped at login
+local USED_CHOSEN = 0.5        -- "used" without Pylos Recommendations: chosen only (its share there)
+
+-- an ID is kept only if this says yes (set in Spotlight.lua); nil: every ID
+memory.accept = nil
+
+local function DB() return ns.db end
+
+local function Value(record, now) return ns.data.Decay(record[1], now - record[2], HALF_LIFE) end
+
+-- how strongly a record counts now, 0..1: value / (value + 1)
+local function Strength(record, now)
+    if not record then return 0 end
+    local value = Value(record, now)
+    return value / (value + 1)
+end
+
+-- the text as learning keys it: searched form, at most 12 characters
+local function LearnKey(text)
+    local key, count = "", 0
+    for char in EachChar(ns.SearchKey(text)) do
+        count = count + 1
+        if count > MAX_LEARNED_LENGTH then break end
+        key = key .. char
+    end
+    return key
+end
+
+-- remembers a choice after typing text (may be empty); amount 1 for a choice, 0.5 for only looking
+function memory.Chose(id, text, amount)
+    local db = DB()
+    if not db or not id or (memory.accept and not memory.accept(id)) then return end
+    local learned, now = db.learned, time()
+    local function Into(key, exact)
+        learned[key] = learned[key] or {}
+        local bucket = learned[key]
+        local record = bucket[id]
+        local value = record and Value(record, now) or 0
+        bucket[id] = { value + (amount or 1), now, (exact or (record and record[3])) and 1 or nil }
+    end
+    -- "" counts every choice (also by mouse without text); the text's prefixes only if typed
+    Into("")
+    local whole = LearnKey(text)
+    local key = ""
+    for char in EachChar(whole) do
+        key = key .. char
+        Into(key, key == whole)
+    end
+end
+
+-- function(id) -> strength 0..1, and true if chosen under exactly this text (not only a longer
+-- one starting with it); looked up once per search
+function memory.LearnedFor(text)
+    local db = DB()
+    local key = LearnKey(text)
+    local bucket = db and key ~= "" and db.learned[key]
+    local now = time()
+    return function(id)
+        local record = bucket and id and bucket[id]
+        if not record then return 0, false end
+        return Strength(record, now), record[3] == 1
+    end
+end
+
+function memory.EachLearned(text, add)
+    local db = DB()
+    local key = LearnKey(text)
+    local bucket = db and key ~= "" and db.learned[key]
+    if not bucket then return end
+    for id in pairs(bucket) do add(id) end
+end
+
+-- how much an entry is chosen at all, 0..1 (scaled like the recommendations' "used", which counts more)
+function memory.UsedNow()
+    local db = DB()
+    local all = db and db.learned[""]
+    local now = time()
+    return function(id)
+        return id and all and USED_CHOSEN * Strength(all[id], now) or 0
+    end
+end
+
+function memory.Recent()
+    local db = DB()
+    local bucket = db and db.learned[""]
+    local list = {}
+    if not bucket then return list end
+    for id, record in pairs(bucket) do list[#list + 1] = { id, record[2] } end
+    table.sort(list, function(a, b) return a[2] > b[2] end)
+    for i, item in ipairs(list) do list[i] = item[1] end
+    return list
+end
+
+function memory.Knows(id)
+    local db = DB()
+    if not db or not id then return false end
+    for _, bucket in pairs(db.learned) do
+        if bucket[id] then return true end
+    end
+    return false
+end
+
+function memory.Forget(id)
+    local db = DB()
+    if not db or not id then return end
+    for key, bucket in pairs(db.learned) do
+        bucket[id] = nil
+        if next(bucket) == nil then db.learned[key] = nil end
+    end
+end
+
+function memory.Reset()
+    local db = DB()
+    if db then wipe(db.learned) end
+end
+
+function memory.Prune()
+    local db = DB()
+    if not db then return end
+    local now = time()
+    for key, bucket in pairs(db.learned) do
+        local left = false
+        for id, record in pairs(bucket) do
+            if Value(record, now) < FORGOTTEN then bucket[id] = nil else left = true end
+        end
+        if not left then db.learned[key] = nil end
+    end
+end

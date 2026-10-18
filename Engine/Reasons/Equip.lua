@@ -1,0 +1,34 @@
+local _, D = ...
+if D.off then return end
+local ns = D.engine
+local L = ns.L
+
+-- Equip: an upgrade already in your bags (ns.UpgradeOf, Upgrade.lua: the one check, same threshold). Putting it on
+-- costs nothing and only helps, so it is always something to do now: stage "play", the heaviest weight, at least a plain
+-- strength however small the gain (a bigger one counts more). An upgrade still to get is Upgrade.lua's.
+
+ns.RegisterReason({
+    key = "equip",
+    -- weight 1.4 (the heaviest): free and only good; not learned from (Learning\Upgrades.lua watches what you do with upgrades)
+    stage = "play", weight = 1.4, label = "Equip", learn = false,
+    sources = { "items" },
+    depends = { "bags", "gear", "level", "talents", "spells", "rec:weights", "data" },
+    topic = "gear",
+    prepare = D.RefreshOwned, -- (D.bagItems read below: as they are now)
+    test = function(entry)
+        if not (entry.itemClass == 2 or entry.itemClass == 4) or not D.bagItems[entry.itemID] then return nil end
+        local r = ns.UpgradeOf(entry.itemID)
+        if not r then return nil end
+        return math.max(1, ns.UpgradeStrength(r))
+    end,
+    reach = function() return ns.reach.NOW, nil end,
+    note = function(entry)
+        local r = ns.UpgradeOf(entry.itemID)
+        return r and (L["Equip"] .. ": " .. ns.UpgradeText(r)) or nil
+    end,
+    why = function(entry)
+        local r = ns.UpgradeOf(entry.itemID)
+        if not r then return nil end
+        return L["In your bags: makes you %.1f %% stronger"]:format(r.share)
+    end,
+})
