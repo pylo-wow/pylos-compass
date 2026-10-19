@@ -40,7 +40,7 @@ local pending = {}      -- entry ID -> { at = time(), reasons = { key = true }, 
 local multipliers = { ["do"] = {}, know = {} } -- kind -> reason key -> personal weight
 local expiredAt = 0
 
-local function Stats(kind) return ns.db and ns.db.reasonStats[kind] end
+local function Stats(kind) return ns.engineDB and ns.engineDB.reasonStats[kind] end
 
 -- the kind a reason's counts are kept under: its own; for a reason of both kinds the kind suggested
 local function KindOf(key, kind)
@@ -138,7 +138,7 @@ end
 -- waiting, it keeps its time (reasons of another kind are added). What a reason offers there waits too (a trainer's
 -- spells: learned, or passed at the trainer, Learning\Declined.lua). Not in combat.
 function learning.Shown(entry, kind, rank)
-    if not ns.db or InCombatLockdown() then return end
+    if not ns.engineDB or InCombatLockdown() then return end
     local id = D.EntryID(entry)
     if not id then return end
     local now = time()
@@ -161,7 +161,7 @@ end
 -- at once. kind: "do" (default) or "know".
 function learning.Feedback(entry, good, kind)
     local id = D.EntryID(entry)
-    if not id or not ns.db then return end
+    if not id or not ns.engineDB then return end
     pending[id] = nil
     local keys = ns.reasons.Keys(entry, kind)
     for _, key in ipairs(keys) do
@@ -175,7 +175,7 @@ end
 -- a sign seen elsewhere (Learning\Upgrades.lua): a reason's hit or miss; evidence a key of EVIDENCE; id and words for
 -- the log
 function learning.Observe(key, hit, evidence, id, words)
-    if not ns.db then return end
+    if not ns.engineDB then return end
     Count(key, hit, evidence)
     learning.Refresh()
     ns.Log(hit and "followed" or "declined", id, key .. " " .. evidence .. (words and (" " .. words) or ""))
@@ -185,7 +185,7 @@ end
 -- Nothing if it was not among the suggestions; true if counted.
 function learning.Declined(id, words)
     local waiting = id and pending[id]
-    if not waiting or not ns.db then return false end
+    if not waiting or not ns.engineDB then return false end
     pending[id] = nil
     local keys = {}
     for key in pairs(waiting.reasons) do

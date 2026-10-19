@@ -202,16 +202,21 @@ local function Menu(row)
             window.Update(true)
         end
     end
+    -- the search takes over: the window closes (in combat the search does not open, so it stays)
+    local function InSearch(id, name)
+        if not InCombatLockdown() then window.Close() end
+        D.search.Show(id, name)
+    end
     local look, act, rate = {}, {}, {}
     if questID then
         look[#look + 1] = { own and L["Open in quest log"] or L["Open %s in quest log"]:format(title),
             function() OpenQuest(questID) end, icon = ICONS.questLog }
     end
     if ns.db.searchOn ~= false then
-        look[#look + 1] = { L["Search"], function() D.search.Show(D.EntryID(entry), entry.name) end,
+        look[#look + 1] = { L["Search"], function() InSearch(D.EntryID(entry), entry.name) end,
             icon = ICONS.details }
         if questID and not own then
-            look[#look + 1] = { L["Find the quest in the search"], function() D.search.Show("q:" .. questID, title) end,
+            look[#look + 1] = { L["Find the quest in the search"], function() InSearch("q:" .. questID, title) end,
                 icon = ICONS.details }
         end
     end

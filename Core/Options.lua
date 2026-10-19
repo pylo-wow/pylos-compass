@@ -52,7 +52,7 @@ local options = {
     savedVariable = "PylosCompassDB",
     title = "Pylos Compass",
     intro = L["Search for anything in the game and see what is worth doing next."],
-    icon = "Interface\\Icons\\INV_Misc_Spyglass_02",
+    icon = "Interface\\AddOns\\PylosCompass\\Button.tga",
     slash = "/pcompass",
     slashLeftClick = true, -- /pcompass opens the search, /pcompass options the options
     defaults = defaults,
@@ -96,3 +96,12 @@ PylosCompass.ToggleSearch = function()
     search.Toggle()
 end
 PylosCompass.ToggleWindow = advice.ToggleWindow
+
+-- the compass art sits a bit up and left of the button's ring at the kit's spot (half a unit, a whole one overshoots)
+D.On("PLAYER_LOGIN", function()
+    local icon = D.minimapButton and D.minimapButton.icon
+    if icon then
+        icon:ClearAllPoints()
+        icon:SetPoint("CENTER", 0.5, 0.5)
+    end
+end)

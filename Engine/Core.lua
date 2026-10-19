@@ -80,6 +80,6 @@ local function Ready()
 end
 
 D.OnLoaded(function()
-    ns.db = D.kit.Saved("PylosCompassEngineDB", { defaults = DEFAULTS, version = 1 })
+    ns.engineDB = D.kit.Saved("PylosCompassEngineDB", { defaults = DEFAULTS, version = 1 })
     Ready()
 end)

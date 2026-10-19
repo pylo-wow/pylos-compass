@@ -23,7 +23,7 @@ local arrived = {} -- zone -> time() you came the first time (this session)
 local zone        -- your zone; see prepare
 
 local function Look()
-    local db = ns.db
+    local db = ns.engineDB
     local here = D.PlayerZone()
     if not db or not here then return end
     local key = ns.Character()

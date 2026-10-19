@@ -111,11 +111,17 @@ ns.data.On("PLAYER_ENTERING_WORLD", function()
     -- loading screen is still up: build the small sources here, unseen
     ns.index.BuildMissing()
     if ns.db.defaultKeySet or ns.db.searchOn == false then return end
+    if InCombatLockdown() then return end -- bindings change only out of combat: try again next time
     ns.db.defaultKeySet = true
     local taken = GetBindingAction(DEFAULT_KEY)
     if not GetBindingKey(COMMAND) and (taken == nil or taken == "") then
         SetBinding(DEFAULT_KEY, COMMAND)
         SaveBindings(GetCurrentBindingSet())
+        print(("|cffffd100Pylos Compass|r: %s"):format(
+            L["%s opens the search now; change it in the key bindings."]:format(GetBindingText(DEFAULT_KEY))))
+    elseif not GetBindingKey(COMMAND) then
+        print(("|cffffd100Pylos Compass|r: %s"):format(
+            L["The search has no key yet: set one in the key bindings (Pylos Compass)."]))
     end
 end)
 

@@ -7,7 +7,7 @@
 ## X-License: GPL-3.0-or-later
 ## OptionalDeps: PylosGatherInfo
 ## SavedVariables: PylosCompassDB, PylosCompassWorldDB, PylosCompassEngineDB
-## IconTexture: Interface\Icons\INV_Misc_Spyglass_02
+## IconTexture: Interface\AddOns\PylosCompass\Icon.tga
 
 # Kit: options, saved variables, minimap button, widgets
 Kit\Kit.lua

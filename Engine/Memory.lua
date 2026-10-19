@@ -35,7 +35,13 @@ local USED_CHOSEN, USED_HERE, USED_DONE = 0.5, 0.2, 0.3
 local KINDS = { "do", "know" }
 
 -- only IDs of entries are kept (a quest item's spell would only fill it)
-local function Accept(id) return D.EntryByID(id) ~= nil end
+-- (a domain still being built cannot judge yet: right after login the big ones are not there, so its IDs pass)
+local BUILDING = { i = "items", n = "npcs", q = "quests", s = "professions" }
+local function Accept(id)
+    if D.EntryByID(id) ~= nil then return true end
+    local domain = BUILDING[id:sub(1, 1)]
+    return domain ~= nil and not D.Built(domain)
+end
 
 -- auto attacks are active spells but every swing-timer cast would count as "done": Auto Shot, Attack, Shoot, Throw,
 -- Shoot Bow / Gun / Crossbow
@@ -51,7 +57,7 @@ local function Acted(id)
     for _, listener in ipairs(listeners) do listener(id) end
 end
 
-local function DB() return ns.db end
+local function DB() return ns.engineDB end
 local function Changed() D.BumpState("rec:memory") end
 
 -- how strongly a record counts now, 0..1: value / (value + half), so with half = 1 one choice is 0.5, three are 0.75

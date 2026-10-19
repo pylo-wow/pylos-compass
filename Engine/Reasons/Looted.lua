@@ -12,7 +12,7 @@ local STARTS_QUEST = 1.5   -- an item that starts a quest: this much stronger
 local fresh = {}           -- item ID -> time() it came (this session)
 
 local function Look()
-    local db = ns.db
+    local db = ns.engineDB
     if not db then return end
     D.RefreshOwned()
     -- an empty scan must not become the character's "first look" (every item would count as new next time)

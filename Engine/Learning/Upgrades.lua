@@ -29,7 +29,7 @@ local open = {}    -- window ("merchant", "elsewhere") -> true while open, else 
 
 -- this character's judged items: item ID -> time() judged
 local function Judged()
-    local db = ns.db
+    local db = ns.engineDB
     if not db then return nil end
     local key = ns.Character()
     db.upgradesJudged[key] = db.upgradesJudged[key] or {}
@@ -140,7 +140,7 @@ if RollOnLoot then hooksecurefunc("RollOnLoot", function(rollID, rollType) pcall
 
 -- the judged items older than JUDGED_DAYS go (at load: Core.lua)
 function ns.learning.PruneJudged()
-    local db = ns.db
+    local db = ns.engineDB
     if not db then return end
     local oldest = time() - JUDGED_DAYS * 86400
     for key, judged in pairs(db.upgradesJudged) do

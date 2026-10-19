@@ -84,6 +84,7 @@ end
 local BUDGET = 3
 local function Now() return GetTimePreciseSec() * 1000 end
 local queue = {}  -- { job, name } waiting, in order
+local failed = {} -- names of jobs that raised an error: BuildMissing does not retry their domain (one report only)
 local running     -- the job's name running right now
 local builder, ticker
 local sliceStart = 0
@@ -118,6 +119,7 @@ local function Start()
             -- log with the coroutine's own stack; only the failed job is dropped, the rest continue
             local _, stack = pcall(debugstack, co)
             geterrorhandler()(tostring(err) .. "\n" .. (type(stack) == "string" and stack or ""))
+            if running then failed[running] = true end
             running = nil
             if #queue > 0 then Start() end
         end
@@ -152,13 +154,15 @@ function D.NoPause() end
 function D.Rebuild(key)
     local domain = D.domains[key]
     if not domain then return end
+    failed["domain:" .. key] = nil
     D.Background("domain:" .. key, function(P) BuildDomain(domain, P) end)
 end
 
 -- Builds needed domains that are missing: small ones at once, big ones in the background.
 function D.BuildMissing()
     for _, domain in ipairs(D.order) do
-        if not domain.list and D.Needed(domain.key) and not D.Waiting("domain:" .. domain.key) then
+        if not domain.list and D.Needed(domain.key) and not D.Waiting("domain:" .. domain.key)
+                and not failed["domain:" .. domain.key] then
             if domain.background then
                 D.Rebuild(domain.key)
             else
@@ -168,12 +172,14 @@ function D.BuildMissing()
     end
 end
 
+--@debug@
 -- Builds at once (developer tools and tests); refuses while the background builder runs.
 function D.BuildNow(key)
     if builder then return false end
     BuildDomain(D.domains[key], D.NoPause)
     return true
 end
+--@end-debug@
 
 -- Frees a domain's list; a queued build is removed, a running one discards its result (generation).
 function D.Drop(key)

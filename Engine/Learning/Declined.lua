@@ -87,7 +87,7 @@ end
 
 local function On(event, fn)
     ns.On(event, function(_, ...)
-        if ns.db then fn(...) end
+        if ns.engineDB then fn(...) end
     end)
 end
 On("TRAINER_SHOW", TrainerShown)
