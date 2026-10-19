@@ -7,9 +7,9 @@ For WoW Forever (Interface 16001). Needs no other addon. Pylos GatherInfo is opt
 ## Search
 
 - Press the key (Alt+Space if it was free; change it in the options), type a few letters and press Enter: a spell is cast or an item used, anything else opens its details.
-- The categories (spells, items, professions, NPCs, dungeons and raids, quests) can be switched off in the options.
+- The categories (spells, items, professions, NPCs, dungeons and raids, quests) can be hidden with a right-click on their tab; "Show all hidden" in the options brings them back.
 - Filters, the details of an entry, where to find it and what it is for are in the entry's menu (Space).
-- It learns what you choose for what you typed. "Reset" in the options forgets that.
+- It learns what you choose for what you typed, and the recommendations what you do and how you answer them. "Learn from what I do" on the *Learning* page of the settings switches that off; its two Reset buttons forget what each part learned.
 - It opens only out of combat.
 
 ## Recommendations

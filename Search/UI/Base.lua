@@ -23,6 +23,7 @@ ui.WINDOW_GAP = 6 -- the window below the bar starts this far below it
 local tip = CreateFrame("GameTooltip", "PylosCompassTooltip", UIParent, "GameTooltipTemplate")
 tip:SetFrameStrata("TOOLTIP")
 tip.noGatherInfo = true -- Pylos GatherInfo: we add its line ourselves
+tip.noUpgradeLines = true -- Pylos Item Upgrades: the rows and "For you" say what changes
 ui.tip = tip
 
 -- rows a list shows at once: MAX_RESULTS, more beside many subcategory tabs

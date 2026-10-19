@@ -68,6 +68,7 @@ end
 local made = CreateFrame("GameTooltip", "PylosCompassMadeTooltip", UIParent, "GameTooltipTemplate")
 made:SetFrameStrata("TOOLTIP")
 made.noGatherInfo = true
+made.noUpgradeLines = true
 tip:HookScript("OnHide", function() made:Hide() end)
 local function Shows(tooltip, text)
     for i = 2, tooltip:NumLines() do

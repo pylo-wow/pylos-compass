@@ -81,6 +81,7 @@ end)
 detail.tip = CreateFrame("GameTooltip", "PylosCompassDetailTooltip", detail, "GameTooltipTemplate")
 detail.tip:SetFrameStrata("TOOLTIP")
 detail.tip.noGatherInfo = true
+detail.tip.noUpgradeLines = true -- as the list's tooltip (Base.lua)
 
 detail.id = detail:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 detail.id:SetPoint("BOTTOMRIGHT", -18, 39)
