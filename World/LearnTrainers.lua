@@ -117,7 +117,7 @@ local function NoteTeaches(event)
     local spells, added, costs = {}, false, false
     for spell in (learned.teaches or ""):gmatch("%d+") do spells[tonumber(spell)] = true end
     scanning = true
-    local whole = Unfiltered(function()
+    local ran, whole = pcall(Unfiltered, function()
         for index = 1, GetNumTrainerServices() or 0 do
             local data = C_TooltipInfo.GetTrainerService(index)
             local spellID = data and data.id
@@ -128,6 +128,7 @@ local function NoteTeaches(event)
         end
     end)
     scanning = false
+    if not ran then geterrorhandler()(whole) return end -- an error must not keep the scan off for the session
     if not whole then return end
     if not added and learned.teachesFull then
         if costs then D.BumpState("npcs") end

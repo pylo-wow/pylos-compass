@@ -190,7 +190,12 @@ local EVENTS = {
     PLAYER_TARGET_CHANGED = { "target" },
     GROUP_ROSTER_UPDATE = { "group" }, UNIT_LEVEL = { "group" }, PLAYER_UPDATE_RESTING = { "group" },
 }
-local function OnEvent(event)
+local function OnEvent(event, unit)
+    -- a level change of anyone else (name plates, targets) is no change of the group
+    if event == "UNIT_LEVEL" and (D.Secret(unit) or type(unit) ~= "string"
+            or not (unit == "player" or unit:find("^party") or unit:find("^raid"))) then
+        return
+    end
     local names = EVENTS[event]
     for i = 1, #names do Bump(names[i]) end
 end

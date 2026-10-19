@@ -44,7 +44,11 @@ D.On("ADDON_LOADED", function(_, name)
     db.crossings = db.crossings or {}
     D.SeedSeen(db)
     D.world = db
-    for _, fn in ipairs(loaded) do fn() end
+    -- one failing learner does not keep the others from starting
+    for _, fn in ipairs(loaded) do
+        local ok, err = pcall(fn)
+        if not ok then geterrorhandler()(err) end
+    end
 end)
 
 -- Data\Seen.lua ships what the author's game learned and counts as seen, before the 1.12 data.
