@@ -59,8 +59,9 @@ function D.PlayerRatings()
     local hit = Number(GetHitModifier and GetHitModifier())
     local spellHit = Number(GetSpellHitModifier and GetSpellHitModifier())
     local defense = 0
-    if UnitDefense then
-        local base, bonus = UnitDefense("player")
+    local defenseSkill = UnitDefenseSkill or UnitDefense -- UnitDefenseSkill is the client's name (UnitDocumentation.lua)
+    if defenseSkill then
+        local base, bonus = defenseSkill("player")
         defense = Number(base) + Number(bonus)
     end
     return { hit = hit, spellHit = spellHit, defense = defense }

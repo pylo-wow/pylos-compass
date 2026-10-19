@@ -29,7 +29,8 @@ local bookTabs = {}
 function D.SpellBookTabs() return bookTabs end
 
 function D.SpellKnown(spellID)
-    return IsPlayerSpell(spellID) or (IsSpellKnown ~= nil and IsSpellKnown(spellID))
+    return (IsPlayerSpell and IsPlayerSpell(spellID)) or (C_SpellBook and C_SpellBook.IsSpellKnown and C_SpellBook.IsSpellKnown(spellID))
+        or (IsSpellKnown ~= nil and IsSpellKnown(spellID))
 end
 local Known = D.SpellKnown
 

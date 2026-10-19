@@ -153,8 +153,9 @@ polls.ratings = function()
     local hit = GetHitModifier and GetHitModifier() or 0
     local spellHit = GetSpellHitModifier and GetSpellHitModifier() or 0
     local defense = 0
-    if UnitDefense then
-        local base, bonus = UnitDefense("player")
+    local defenseSkill = UnitDefenseSkill or UnitDefense -- UnitDefenseSkill is the client's name (UnitDocumentation.lua)
+    if defenseSkill then
+        local base, bonus = defenseSkill("player")
         if D.Secret(base) or D.Secret(bonus) then return -1 end
         defense = (base or 0) + (bonus or 0)
     end
