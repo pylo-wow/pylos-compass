@@ -8,7 +8,7 @@ local D = ns.data
 -- Entries come from Data (World\Dungeons.lua). Opened without text: all by level, dungeons before
 -- raids of the same level. Tabs: dungeons, raids; filter: your level. No action.
 
--- texts (kind, levels, raid size) and tooltip lines: Data (World\Lines.lua), shared with Recommendations
+-- texts (kind, levels, raid size) and tooltip lines: Data (World\Lines.lua), shared with the recommendations
 local KINDS, Levels, Players = D.DUNGEON_KINDS, D.DungeonLevelText, D.DungeonPlayersText
 
 local function ZoneName(id)

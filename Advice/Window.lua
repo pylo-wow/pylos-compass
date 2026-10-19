@@ -2,14 +2,14 @@ local ns = select(2, ...).advice
 if ns.off then return end
 local D = ns.data
 local L = ns.L
-local W = ns.widgets -- shared with Pylos Spotlight
+local W = ns.widgets -- shared with the search window
 
 -- Suggestions window (minimap left click or /prec), built from the widgets shared with the search (Widgets.lua).
 --   tabs: one per topic (Reasons.lua), always one set (no all-in-one list: what is important now comes as a nudge, Push.lua). Each counts its suggestions; empty ones are dimmed; close tab at the right end.
 --   subtopics: side tabs (Subtopics.lua, W.SideTabs); the set one narrows the list, clicking it again clears it.
 --   list: best first (ns.RelevantByTopic); row = icon, name, category, strongest reason's note (text, or symbol with count). Hover shows the game's tooltip with every reason beside the window.
 --   click: uses/equips an item, casts a spell, opens a recipe's profession window (secure: left click, out of combat), sets a waypoint, or (Quests tab) opens the quest in the quest log.
---   right click: the search's menu (quest log, Spotlight search, waypoint, good/bad/don't suggest).
+--   right click: the search's menu (quest log, search, waypoint, good/bad/don't suggest).
 -- Draggable (rows too), anchored at its top left so a shorter list shrinks upwards. Updates on open and soon after changes (events, no timer), not while the mouse is over it.
 -- Animation as the search's (STYLEGUIDE); rows do not slide in (they change on each update). Closes before combat: secure buttons cannot change in combat.
 
@@ -17,12 +17,12 @@ local ROWS = 10
 local ALL = 999           -- a topic's list in full (its tab counts it)
 local PER_DOMAIN = 4      -- at most this many of one kind per list
 local AWAY = 10 * 60      -- seconds closed: then it opens at the tab worth most, else where you were
--- shared with Spotlight (Widgets.lua)
+-- shared with the search (Widgets.lua)
 local WIDTH, ROW_HEIGHT, NAME_X = W.WIDTH, W.ROW_HEIGHT, W.NAME_X
 local TAB, TAB_GAP = W.TAB_SIZE, W.TAB_GAP
 local DOT = W.DOT
 local SOON = 0.5          -- seconds after something changed
-local BACKGROUND = 0.85   -- opacity when Spotlight's is not there
+local BACKGROUND = 0.85   -- opacity when the search window's is not there
 local TOOLTIP_WAIT = W.TOOLTIP_WAIT
 local NONE = {}
 
@@ -150,12 +150,12 @@ local function Tooltip(row, waited)
     elseif entry.spellID and entry.domain ~= "npcs" then
         tip:SetSpellByID(entry.spellID)
     else
-        -- NPC, quest, dungeon: name and lines as Spotlight (Data World\Lines.lua), else its category
+        -- NPC, quest, dungeon: name and lines as in the search (World\Lines.lua), else its category
         if not W.EntryText(tip, entry) and entry.category then
             tip:AddLine(entry.category, W.SUB[1], W.SUB[2], W.SUB[3])
         end
     end
-    -- why (incl. what the row carries), a quest's still-to-do and the click text: format shared with Spotlight (Widgets.lua)
+    -- why (incl. what the row carries), a quest's still-to-do and the click text: format shared with the search (Widgets.lua)
     local why = ns.Explain(entry)
     for _, carried in ipairs(item.carries or NONE) do
         local note = ns.reasons.NoteText(ns.Note(carried))
@@ -173,7 +173,7 @@ end)
 
 -- Rows
 
--- row under the mouse: lit, name in gold; unlearned entries (trainer spell, recipe) dimmed, as in Spotlight
+-- row under the mouse: lit, name in gold; unlearned entries (trainer spell, recipe) dimmed, as in the search
 local function Mark(row, on)
     local entry = row.item and row.item.entry
     W.MarkRow(row, on, entry and entry.hidden == true)
@@ -210,7 +210,7 @@ local function Menu(row)
     if entry.place and C_Map.SetUserWaypoint and UiMapPoint then
         act[#act + 1] = { L["Set waypoint"], function() W.Waypoint(entry.name, entry.place) end, icon = SYMBOLS.waypoint }
     end
-    -- rating, confirmed at the top of the screen as in Spotlight
+    -- rating, confirmed at the top of the screen as in the search
     rate[1] = { SYMBOLS.good, L["Good suggestion"], Then(function()
         ns.Feedback(entry, true)
         W.Notice(L["Noted: suggestions like this count more for you."])
@@ -271,7 +271,7 @@ local function Row(list, i)
     return row
 end
 
--- grey line below the name: the category; dungeons as Spotlight: kind, levels, entrance zone if known
+-- grey line below the name: the category; dungeons as in the search: kind, levels, entrance zone if known
 local DUNGEON_KINDS = D.DUNGEON_KINDS
 local function Describe(entry)
     -- quest: level, then first open objective ("+2" for more; the tooltip lists all), else its zone

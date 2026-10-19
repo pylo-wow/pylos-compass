@@ -1,7 +1,7 @@
 local _, D = ...
 if D.off then return end
 
--- Game state as versions: one caching concept for Data, Recommendations and Spotlight.
+-- Game state as versions: one caching concept for every part of the addon.
 --
 -- A state is a named part of the game that results depend on; its version grows whenever it may have changed.
 -- A result kept with the versions it was made from is valid while they are unchanged.

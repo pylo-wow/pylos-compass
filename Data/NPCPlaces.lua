@@ -9,7 +9,7 @@ local _, ns = ...
 -- x from the left, y from the top, as UiMapPoint.CreateFromCoordinates takes
 -- them divided by 1000). The zone is the one with most of the NPC's spawns,
 -- the spot the spawn there closest to the median of those spawns. NPCs
--- without spawns in a zone are missing, and so are NPCs Spotlight does not list
+-- without spawns in a zone are missing, and so are NPCs the search does not list
 -- (not in NPCNames_enUS.lua).
 ns.npcPlaces = {
 [3]=1431238380,[6]=1429492365,[30]=1429381696,[36]=1436479334,[38]=1429541478,[40]=1429609597,[43]=1429617474,[46]=1429792542,

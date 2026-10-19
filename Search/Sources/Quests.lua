@@ -27,7 +27,7 @@ local function Done(entry)
     return C_QuestLog.IsQuestFlaggedCompleted(entry.questID) == true
 end
 
--- row texts and tooltip lines: Data (World\Lines.lua), shared with Recommendations
+-- row texts and tooltip lines: Data (World\Lines.lua), shared with the recommendations
 local Belongs = D.QuestBelongs
 
 -- line below the name: kind (elite, dungeon, raid, PvP; daily, weekly), where (zone or dungeon; class,

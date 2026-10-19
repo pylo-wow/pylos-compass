@@ -3,7 +3,7 @@ if D.off then return end
 local ns = D.engine
 local L = ns.L
 
--- Looked up (knowing): what you chose in a search again and again (a host tells it: Spotlight, R.Chose), more what you
+-- Looked up (knowing): what you chose in a search again and again (a host tells it: the search, R.Chose), more what you
 -- chose in the situation you are in now (resting, instance, group, alone: Memory.lua), e.g. looking up the flight master
 -- after landing. Weak by design: one choice is no reason, only a repeated one, and even then it comes after every other
 -- reason (at most SCALE: below what you just looted, fading). Both fade with the memory's half-life; doing something in

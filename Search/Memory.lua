@@ -14,9 +14,9 @@ ns.memory = memory
 local HALF_LIFE = 14 * 86400   -- seconds
 local MAX_LEARNED_LENGTH = 12
 local FORGOTTEN = 0.05         -- values below are dropped at login
-local USED_CHOSEN = 0.5        -- "used" without Pylos Recommendations: chosen only (its share there)
+local USED_CHOSEN = 0.5        -- "used" without the recommendations: chosen only (its share there)
 
--- an ID is kept only if this says yes (set in Spotlight.lua); nil: every ID
+-- an ID is kept only if this says yes (set in Search\Spotlight.lua); nil: every ID
 memory.accept = nil
 
 local function DB() return ns.db end

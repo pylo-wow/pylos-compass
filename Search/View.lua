@@ -358,7 +358,7 @@ function view.Deeper()
     view.Open(entry.target or entry)
 end
 
--- An entry was chosen: the memory (Memory.lua and Recommendations') learns it after the typed text (if
+-- An entry was chosen: the memory (Memory.lua and the engine's) learns it after the typed text (if
 -- any); amount 0.5 for looking at it (detail view, link list), 0.5 more for doing something with it
 -- there, 1 for doing it straight from the list. Chosen from a list opened without text, the
 -- suggestions above it (entries with a reason) were passed over: they sink a little next time.

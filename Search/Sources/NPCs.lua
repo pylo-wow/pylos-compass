@@ -7,7 +7,7 @@ local D = ns.data
 -- type where there is none. Entries and facts come from Data (World\NPCs.lua). Opened without
 -- text: the NPCs of the zone you are in. No action.
 
--- creature type names, tooltip lines and level text: Data (World\Lines.lua), shared with Recommendations
+-- creature type names, tooltip lines and level text: Data (World\Lines.lua), shared with the recommendations
 local TYPES = D.NPC_TYPE_NAMES
 local ZoneNames, LevelText = D.NPCZoneNames, D.NPCLevelText
 

@@ -2,7 +2,7 @@ local ns = select(2, ...).search
 if ns.off then return end
 local L = ns.L
 
--- Data's recommendation engine (service "engine") behind ns.rec. Spotlight is a search, so
+-- Data's recommendation engine (service "engine") behind ns.rec. the search is a search, so
 -- it asks only for reasons of kind "know": what you would want to look up now (target, fresh
 -- loot, a new zone, your quests' items, your lookups). What to do next is the recommendations' window.
 
@@ -22,7 +22,7 @@ rec.Note = function(entry) return R.Note(entry, KIND) end
 rec.Explain = function(entry) return R.Explain(entry, KIND) end
 rec.Sort = function(list, tiebreak) return R.Sort(list, tiebreak, KIND) end
 rec.Relevant = function(limit, perDomain, domains) return R.Relevant(limit, perDomain, domains, KIND) end
--- the start page showed it: Recommendations watches whether you follow it
+-- the start page showed it: the recommendations watch whether you follow it
 rec.Shown = function(entry) return R.Shown and R.Shown(entry, KIND) end
 rec.UsedNow = R.UsedNow
 rec.UsedIDs = R.UsedIDs

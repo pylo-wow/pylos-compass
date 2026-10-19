@@ -27,7 +27,7 @@ local function Open(byMouse)
     S.unfocused = false
     ns.view.Reset()
     if byMouse then ns.input.Unfocus() end
-    ns.rec.Log("open") -- Recommendations' activity log, if any
+    ns.rec.Log("open") -- the engine's activity log, if any
 end
 
 -- instantly: no fade (the bar's secure buttons must be gone before combat lockdown).

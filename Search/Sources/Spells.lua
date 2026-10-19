@@ -43,7 +43,7 @@ local function Browse(take)
     for _, entry in ipairs(source.index.entries) do
         if not entry.hidden then
             yours[#yours + 1] = entry
-        elseif D.SpellLearnableNow(entry) then -- a fact, not a suggestion (Spotlight is a search)
+        elseif D.SpellLearnableNow(entry) then -- a fact, not a suggestion (the search is no advisor)
             learnable[#learnable + 1] = entry
         end
     end

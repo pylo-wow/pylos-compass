@@ -52,7 +52,7 @@ end
 -- A row: icon, name and a grey line of details on the left; state for you and the reason on the right; the icon
 -- shows the count you carry (from 2) and the quality frame. A heading (entry.header) is a narrow gap with its label.
 local HEADER_HEIGHT = 22
-local HEADING = { 0.75, 0.68, 0.52 } -- a heading's label in the list (PylosUI\STYLEGUIDE.md: heading)
+local HEADING = { 0.75, 0.68, 0.52 } -- a heading's label in the list (STYLEGUIDE.md: heading)
 local NAME_X = W.NAME_X
 
 local function HoverRow(row)
