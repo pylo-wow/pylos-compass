@@ -274,10 +274,10 @@ local function KeyBindingButton(row, command)
         button:SetText(key and GetBindingText(key) or L["Not bound"])
     end
     local function Unbind()
-        local key = GetBindingKey(command)
-        while key do
+        for _ = 1, 8 do -- bounded: a failing SetBinding must not loop forever
+            local key = GetBindingKey(command)
+            if not key then return end
             SetBinding(key)
-            key = GetBindingKey(command)
         end
     end
     button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
@@ -297,7 +297,12 @@ local function KeyBindingButton(row, command)
         self:EnableKeyboard(false)
         if key ~= "ESCAPE" and not InCombatLockdown() then
             Unbind()
-            SetBinding(CreateKeyChordStringUsingMetaKeyState(key), command)
+            local chord = CreateKeyChordStringUsingMetaKeyState(key)
+            local taken = GetBindingAction(chord)
+            if taken and taken ~= "" and taken ~= command then
+                Problem(L["%s was bound to %s; that binding is replaced"]:format(GetBindingText(chord), GetBindingName and GetBindingName(taken) or taken))
+            end
+            SetBinding(chord, command)
             SaveBindings(GetCurrentBindingSet())
         end
         Show()
