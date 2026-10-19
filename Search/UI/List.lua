@@ -182,24 +182,12 @@ local function Describe(entry, linked, mixed)
     return text
 end
 
--- Scroll bar for lists longer than the rows shown: a thin track with a bronze thumb; clicking or dragging scrolls,
--- the mouse wheel scrolls the list itself. The mark only moves along when it would leave the shown rows.
-local SCROLL_WIDTH = 6
-local SCROLL_ROOM = SCROLL_WIDTH + 8 -- what the rows leave free for it
+-- Scroll bar for lists longer than the rows shown (W.ScrollBar, shared with the recommendations window): clicking or
+-- dragging scrolls, the mouse wheel scrolls the list itself. The mark only moves along when it would leave the shown
+-- rows. It is made below, once what it scrolls is defined.
+local SCROLL_ROOM = W.SCROLL_ROOM -- what the rows leave free for it
 ui.SCROLL_ROOM = SCROLL_ROOM
-local TRACK_ALPHA, THUMB, THUMB_MIN = 0.45, { 0.78, 0.62, 0.36, 0.9 }, 16
-local scroll = CreateFrame("Frame", nil, list)
-scroll:SetWidth(SCROLL_WIDTH + 6)
-scroll:SetPoint("TOPRIGHT", -4, -8)
-scroll:SetPoint("BOTTOMRIGHT", -4, 8)
-scroll:EnableMouse(true)
-scroll.track = ui.Fill(scroll, "BACKGROUND", 0, 0, 0, TRACK_ALPHA)
-scroll.track:SetWidth(SCROLL_WIDTH)
-scroll.track:SetPoint("TOP")
-scroll.track:SetPoint("BOTTOM")
-scroll.thumb = ui.Fill(scroll, "ARTWORK", THUMB[1], THUMB[2], THUMB[3], THUMB[4])
-scroll.thumb:SetWidth(SCROLL_WIDTH)
-scroll:Hide()
+local scroll
 
 -- A row in its place: sliding in (row.ease 0-1, see RenderRows), and shown
 -- only as far as the growing list reaches it
@@ -225,16 +213,7 @@ local function ScrollState()
     return #S.results, ui.Rows(), S.top
 end
 
-local function PlaceThumb()
-    if not scroll:IsShown() then return end
-    local height = scroll:GetHeight()
-    local total, visible, top = ScrollState()
-    local size = math.max(height * visible / math.max(total, 1), THUMB_MIN)
-    local offset = (height - size) * top / math.max(total - visible, 1)
-    scroll.thumb:SetHeight(size)
-    scroll.thumb:ClearAllPoints()
-    scroll.thumb:SetPoint("TOP", scroll.track, "TOP", 0, -offset)
-end
+local function PlaceThumb() scroll.Place() end
 ui.PlaceThumb = PlaceThumb
 
 function ui.PlaceRows()
@@ -451,20 +430,7 @@ local function ScrollTo(newTop)
     ns.view.Mark(index, step, true)
 end
 
--- dragging: the cursor's place on the track picks the shown part (every frame while held)
-local function ScrollToCursor()
-    local _, y = GetCursorPosition()
-    local total, visible = ScrollState()
-    local fraction = (scroll:GetTop() - y / scroll:GetEffectiveScale()) / scroll:GetHeight()
-    ScrollTo(math.floor(fraction * (total - visible) + 0.5))
-end
-
-scroll:SetScript("OnMouseDown", function(self)
-    self:SetScript("OnUpdate", ScrollToCursor)
-    ScrollToCursor()
-end)
-scroll:SetScript("OnMouseUp", function(self) self:SetScript("OnUpdate", nil) end)
-scroll:SetScript("OnHide", function(self) self:SetScript("OnUpdate", nil) end)
+scroll = W.ScrollBar(list, { state = ScrollState, scrollTo = ScrollTo })
 
 list:EnableMouseWheel(true)
 list:SetScript("OnMouseWheel", function(_, delta)

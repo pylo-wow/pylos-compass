@@ -136,16 +136,16 @@ ns.RegisterReason({
     why = function(entry)
         local quest = D.QuestOf(entry.questID)
         if not quest then return L["In your quest log"] end
-        local parts = {}
+        -- one line each: where it stands, then what it brings (the lines after the first are details)
+        local lines = { ready[entry.questID] and L["Ready to turn in"] or L["In your quest log"] }
         local xp = Experience(quest)
-        if xp > 0 then parts[#parts + 1] = L["%d %% of a level"]:format(xp * 100 + 0.5) end
+        if xp > 0 then lines[#lines + 1] = L["%d %% of a level"]:format(xp * 100 + 0.5) end
         local _, r, item = Reward(quest)
         if r then
-            parts[#parts + 1] = L["%s makes you %.1f %% stronger"]:format(D.NameEN("item", item) or "?", r.share)
+            lines[#lines + 1] = L["Reward: %s"]:format(D.NameEN("item", item) or "?") .. " (" .. ns.UpgradeText(r) .. ")"
         end
         local chain = Chain(quest)
-        if chain > 0 then parts[#parts + 1] = L["opens %d more"]:format(chain) end
-        if ready[entry.questID] then table.insert(parts, 1, L["ready to turn in"]) end
-        return #parts > 0 and table.concat(parts, ", ") or L["In your quest log"]
+        if chain > 0 then lines[#lines + 1] = L["Opens %d more"]:format(chain) end
+        return table.concat(lines, "\n")
     end,
 })

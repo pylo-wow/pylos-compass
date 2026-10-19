@@ -22,7 +22,7 @@ ui.WINDOW_GAP = 6 -- the window below the bar starts this far below it
 -- own tooltip next to the list: the GameTooltip adds the equipped-item comparison, which would cover the list
 local tip = CreateFrame("GameTooltip", "PylosCompassTooltip", UIParent, "GameTooltipTemplate")
 tip:SetFrameStrata("TOOLTIP")
-tip.noGatherInfo = true -- Pylos GatherInfo: we add its line ourselves (option)
+tip.noGatherInfo = true -- Pylos GatherInfo: we add its line ourselves
 ui.tip = tip
 
 -- rows a list shows at once: MAX_RESULTS, more beside many subcategory tabs

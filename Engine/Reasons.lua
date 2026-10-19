@@ -626,7 +626,8 @@ function reasons.Explain(entry, kind)
     reasons.Each(entry, kind, function(reason, strength, value, _, _, words)
         local text = Sentence(reason, entry, strength)
         if not text then return end
-        if words then text = text .. ns.DOT .. words end
+        -- the sentence, then the way to it as a detail line (AddWhy shows what follows a newline in gray)
+        if words then text = text .. "\n" .. words end
         sorted[#sorted + 1] = { text, value }
     end)
     -- sorted list of pairs, not keyed by text: two reasons with the same sentence would share a value

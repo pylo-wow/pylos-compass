@@ -7,11 +7,16 @@ local search, advice = D.search, D.advice
 
 BINDING_NAME_PYLOSCOMPASS_WINDOW = L["Open recommendations"]
 
--- every row of a part is grayed out while its switch is off
+-- every row of a part is grayed out while its switch is off (a row with a switch of its own too: both count)
 local function Under(entries, switch)
     for _, entry in ipairs(entries) do
-        if entry.dependsOn == nil and entry.type ~= "header" and entry.type ~= "text" then
-            entry.dependsOn, entry.enabledWhen = switch, true
+        if entry.type ~= "header" and entry.type ~= "text" then
+            if entry.dependsOn == nil then
+                entry.dependsOn, entry.enabledWhen = switch, true
+            elseif entry.dependsOn ~= switch then
+                local own = entry.enabledIf
+                entry.enabledIf = function() return D.db ~= nil and D.db[switch] ~= false and (not own or own()) end
+            end
         end
     end
     return entries
@@ -41,52 +46,117 @@ local function AdviceSwitched(on)
     end
 end
 
--- what a click or a key does while the search is off
-local function SearchOff()
-    if D.db.adviceOn ~= false then return advice.ToggleWindow() end
+local function BothOff()
     print(("|cffffd100Pylos Compass|r: %s"):format(
         L["the search and the recommendations are switched off (right-click the minimap button for the options)."]))
 end
 
+-- what a click or a key does while the search is off
+local function SearchOff()
+    if D.db.adviceOn ~= false then return advice.ToggleWindow() end
+    BothOff()
+end
+
+-- ... and while the recommendations are off
+local function AdviceOff()
+    if D.db.searchOn ~= false then return search.ButtonClicked(true) end
+    BothOff()
+end
+
+-- Saved shape 2: the level of each kind of hint (options "nudge_<rule>") replaced the on/off switches "push_<rule>" and
+-- the three level switches. A kind that was switched off stays off; the level switches are gone.
+local function HintLevels(db)
+    for _, rule in ipairs(advice.push.rules) do
+        if db["push_" .. rule.key] == false then db["nudge_" .. rule.key] = "off" end
+        db["push_" .. rule.key] = nil
+    end
+    db.pushQuiet, db.pushMedium, db.pushLoud = nil, nil, nil
+end
+
 local options = {
     savedVariable = "PylosCompassDB",
+    schema = { version = 2, migrations = { [2] = HintLevels } },
     title = "Pylos Compass",
     intro = L["Search for anything in the game and see what is worth doing next."],
     icon = "Interface\\AddOns\\PylosCompass\\Button.tga",
     slash = "/pcompass",
-    slashLeftClick = true, -- /pcompass opens the search, /pcompass options the options
+    slashLeftClick = true, -- /pcompass acts like a left click (the recommendations), /pcompass options opens the options
     defaults = defaults,
     onLeftClick = function()
+        if D.db.adviceOn == false then return AdviceOff() end
+        advice.LeftClick() -- a quiet nudge that glows is shown first
+    end,
+    leftClickText = L["open the recommendations"],
+    onMiddleClick = function()
         if D.db.searchOn == false then return SearchOff() end
         search.ButtonClicked(true)
     end,
-    leftClickText = L["open the search"],
-    onMiddleClick = function() advice.ToggleWindow() end,
-    middleClickText = L["open the recommendations"],
+    middleClickText = L["open the search"],
+    onTooltip = function(tooltip)
+        if advice.push.Glowing() then tooltip:AddLine(L["A new hint: left-click shows it."], 1, 0.82, 0) end
+    end,
     onLoad = function(db)
         search.options.onLoad(db)
         advice.options.onLoad(db)
     end,
 
-    { type = "checkbox", key = "searchOn", label = L["Enable the search"], default = true, onChange = SearchSwitched,
+    { type = "checkbox", key = "searchOn", label = L["Enable search"], default = true, onChange = SearchSwitched,
       -- the shared game data is built either way (the recommendations need it too)
       tooltip = L["The search bar: a key opens it, type a few letters, Enter uses the result. Switched off, the " ..
           "bar stays closed and its lists are dropped; the game data stays loaded."] },
-    { type = "checkbox", key = "adviceOn", label = L["Enable the recommendations"], default = true,
+    { type = "checkbox", key = "adviceOn", label = L["Enable recommendations"], default = true,
       onChange = AdviceSwitched,
-      tooltip = L["The window with what is worth doing next, and the nudges. Switched off, the window and nudges " ..
+      tooltip = L["The window with what is worth doing next, and the hints. Switched off, the window and hints " ..
           "stay away; the game data stays loaded."] },
-    { type = "minimap" },
-    { type = "header", label = L["Search settings"] },
 }
 local function Add(entries)
     for _, entry in ipairs(entries) do options[#options + 1] = entry end
 end
-Add(Under(search.options, "searchOn"))
-options[#options + 1] = { type = "header", label = L["Recommendation settings"] }
+local function Header(label) options[#options + 1] = { type = "header", label = label } end
+local function Percent(value) return ("%d %%"):format(value) end
+local function ApplyAdviceScale()
+    advice.ApplyScale()
+    advice.push.ApplyScale()
+end
+
+-- the page: the two switches, Display, Behaviour; then the subpages (the settings list shows them below Pylos
+-- Compass): Nudges, Learning
+Header(L["Display"])
+options[#options + 1] = search.rows.background -- both windows wear it
+options[#options + 1] = { type = "slider", key = "searchScale", label = L["Search size"], default = 100,
+    min = 70, max = 150, step = 5, format = Percent, tooltip = L["The size of the search bar and its lists."],
+    onChange = function() search.ui.ApplyScale() end }
+options[#options + 1] = { type = "slider", key = "adviceScale", label = L["Recommendations size"], default = 100,
+    min = 70, max = 150, step = 5, format = Percent,
+    tooltip = L["The size of the recommendations window and the hint messages."],
+    onChange = ApplyAdviceScale }
+Add(Under({ { type = "button", label = L["Recommendations window"], text = L["Reset position"],
+    tooltip = L["Move the recommendations window back to where it opens by default, below the minimap."],
+    func = function() advice.ResetPosition() end } }, "adviceOn"))
+Add(Under({ search.rows.showCategories }, "searchOn"))
+
+Header(L["Behaviour"])
+Add(Under({ search.rows.key }, "searchOn"))
 options[#options + 1] = { type = "keybinding", command = "PYLOSCOMPASS_WINDOW", dependsOn = "adviceOn",
     enabledWhen = true }
-Add(Under(advice.options, "adviceOn"))
+Add(Under({ search.rows.clickOutside }, "searchOn"))
+options[#options + 1] = { type = "minimap" }
+
+Under(advice.rows.nudges.entries, "adviceOn")
+options[#options + 1] = advice.rows.nudges
+
+options[#options + 1] = { type = "page", label = L["Learning"], entries = {
+    { type = "text", height = 40,
+      text = L["What you choose and do is remembered only on this computer, to tune the search and the " ..
+          "recommendations."] },
+    { type = "checkbox", key = "learn", label = L["Learn from what I do"], default = true,
+      tooltip = L["Remember what you choose in the search, what you cast, use, buy and turn in, and how you answer " ..
+          "suggestions. Switched off, nothing new is remembered; what is remembered stays until you reset it. " ..
+          "Facts about the game learned while playing (where NPCs stand, what a trainer teaches) are not part " ..
+          "of this."] },
+    Under({ search.rows.weighting }, "searchOn")[1],
+    Under({ advice.rows.reset }, "adviceOn")[1],
+} }
 D.options = options
 
 -- the global API, for key bindings and macros

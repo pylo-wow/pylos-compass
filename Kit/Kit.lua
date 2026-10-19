@@ -35,12 +35,14 @@ local addonName, ns = ...
 --     { type = "minimap" },                 -- "Show minimap button"
 --     { type = "text", text = "...", height = 24 }, -- plain string, height in pixels (default 24)
 --     { type = "page", label = "...", init = function(frame) end }, -- own subpage
+--     { type = "page", label = "...", entries = { ... } },          -- subpage with rows of these types
 -- }
 -- A row of any other type is left out and named in chat.
 -- keybinding: a button that takes the next key pressed for a command from the
 -- addon's Bindings.xml (right-click unbinds); the label is the command's BINDING_NAME_ text.
 -- page: a subpage below the addon for content too tall for a row. init(frame) runs on
--- every show; frame is the area below the page title.
+-- every show; frame is the area below the page title. entries instead: the subpage is built from rows of the
+-- types above (no page inside), with their keys, defaults, tooltips and dependsOn as on the main page.
 -- Entries with a key, and minimap, may have onChange = function(value) end.
 -- dependsOn = "otherKey", enabledWhen = value: grayed out unless that option has
 -- that value. enabledIf = function() -> bool: grayed out while false.
@@ -64,7 +66,7 @@ local addonName, ns = ...
 -- function in it (C_Discord.IsUserOAuthed), so any trace an addon page leaves there gets
 -- the addon blamed for a blocked action.
 
-local VERSION = "1.0.0"
+local VERSION = "1.1.0"
 local CHAT_NAME = "|cffffd100%s|r"
 
 -- rawget: an ns may have an __index
@@ -188,8 +190,8 @@ local function Missing(entry)
         return "a func"
     elseif kind == "keybinding" and type(entry.command) ~= "string" then
         return "a command"
-    elseif kind == "page" and type(entry.init) ~= "function" then
-        return "an init function"
+    elseif kind == "page" and type(entry.init) ~= "function" and type(entry.entries) ~= "table" then
+        return "an init function or entries"
     elseif entry.onChange and type(entry.key) ~= "string" and kind ~= "minimap" then
         return "a key for its onChange"
     end
@@ -337,6 +339,10 @@ local function Build()
     local db
     local category
     local page
+    local target -- the page the entry being built goes to: the main page or a subpage of entries
+    local pages = {}       -- every page built from rows, main page first (laid out together)
+    local ownerOf = {}     -- entry of a subpage -> the page entry that holds it
+    local subpages = {}    -- page entry -> its page
     local minimapButton
     local master -- entry of the master switch, if any
     local title -- display name
@@ -358,7 +364,9 @@ local function Build()
         for _, handler in ipairs(changeHandlers[key] or {}) do handler(value) end
         -- closed: the next OnRefresh lays out anyway (a parentless panel counts as visible, so the first call
         -- still runs)
-        if page and page.panel:IsVisible() then page.Layout() end
+        for _, built in ipairs(pages) do
+            if built.panel:IsVisible() then built.Layout() end
+        end
     end
 
     local function OnChange(key, handler)
@@ -502,6 +510,13 @@ local function Build()
     end
 
     local function AddPage(entry)
+        if entry.entries then
+            local sub = NewPage(entry.label)
+            pages[#pages + 1] = sub
+            subpages[entry] = sub
+            Settings.RegisterCanvasLayoutSubcategory(category, sub.panel, entry.label)
+            return
+        end
         local panel = CreateFrame("Frame")
         local heading = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightHuge")
         heading:SetPoint("TOPLEFT", 7, -22)
@@ -529,17 +544,17 @@ local function Build()
         local kind = entry.type
         local row
         if kind == "header" then
-            row = AddPageRow(page, 45)
+            row = AddPageRow(target, 45)
             local text = row.frame:CreateFontString(nil, "ARTWORK", "GameFontHighlightLarge")
             text:SetPoint("BOTTOMLEFT", 7, 8)
             text:SetText(entry.label)
         elseif kind == "text" then
-            row = AddTextRow(page, entry.height or 24, entry.text)
+            row = AddTextRow(target, entry.height or 24, entry.text)
         elseif kind == "page" then
             AddPage(entry)
         elseif kind == "checkbox" or kind == "minimap" then
             local key = entry.key or "minimap"
-            row = AddPageRow(page, ROW_HEIGHT, kind == "minimap" and L["Show minimap button"] or entry.label)
+            row = AddPageRow(target, ROW_HEIGHT, kind == "minimap" and L["Show minimap button"] or entry.label)
             local box = CreateFrame("CheckButton", nil, row.frame, "SettingsCheckboxTemplate")
             -- the template's OnEnter/OnLeave show Blizzard's (empty) SettingsTooltip; keep only its hover background
             box:SetScript("OnEnter", function(self) if self.HoverBackground then self.HoverBackground:Show() end end)
@@ -550,7 +565,7 @@ local function Build()
             row.refresh = function() box:SetChecked(db[key] and true or false) end
         elseif kind == "dropdown" or PRESETS[kind] then -- color and modifier: dropdowns with ready values
             local values = PRESETS[kind] and PRESETS[kind]() or entry.values
-            row = AddPageRow(page, ROW_HEIGHT, entry.label)
+            row = AddPageRow(target, ROW_HEIGHT, entry.label)
             local dropdown = CreateFrame("DropdownButton", nil, row.frame, "WowStyle1DropdownTemplate")
             dropdown:SetPoint("LEFT", row.frame, "CENTER", -80, 0)
             dropdown:SetWidth(200)
@@ -563,7 +578,7 @@ local function Build()
             row.control = dropdown
             row.refresh = function() dropdown:GenerateMenu() end -- shows the chosen value
         elseif kind == "slider" then
-            row = AddPageRow(page, ROW_HEIGHT, entry.label)
+            row = AddPageRow(target, ROW_HEIGHT, entry.label)
             local slider = CreateFrame("Frame", nil, row.frame, "MinimalSliderWithSteppersTemplate")
             slider:SetPoint("LEFT", row.frame, "CENTER", -80, 0)
             slider:SetWidth(250)
@@ -575,7 +590,7 @@ local function Build()
             row.control = slider
             row.refresh = function() slider:SetValue(db[entry.key]) end
         elseif kind == "button" then
-            row = AddPageRow(page, ROW_HEIGHT, entry.label)
+            row = AddPageRow(target, ROW_HEIGHT, entry.label)
             local button = CreateFrame("Button", nil, row.frame, "UIPanelButtonTemplate")
             button:SetPoint("LEFT", row.frame, "CENTER", -80, 0)
             button:SetSize(200, 22)
@@ -583,7 +598,7 @@ local function Build()
             button:SetScript("OnClick", function() entry.func() end)
             row.control = button
         elseif kind == "keybinding" then
-            row = AddPageRow(page, ROW_HEIGHT, _G["BINDING_NAME_" .. entry.command] or entry.command)
+            row = AddPageRow(target, ROW_HEIGHT, _G["BINDING_NAME_" .. entry.command] or entry.command)
             local button, show = KeyBindingButton(row, entry.command)
             button:SetPoint("LEFT", row.frame, "CENTER", -80, 0)
             button:SetSize(200, 22)
@@ -595,13 +610,17 @@ local function Build()
 
     local function BuildMenu()
         page = NewPage(title)
+        target = page
+        pages[1] = page
         ns.kit.page = page -- for the tests
+        ns.kit.pages = pages -- ditto, the main page and the subpages made of entries
         -- a top-level entry of its own in the game's AddOns settings
         category = Settings.RegisterCanvasLayoutCategory(page.panel, title)
         if options.intro then AddTextRow(page, 32, options.intro) end
 
         local afterMaster = false
         for _, entry in ipairs(entries) do
+            target = ownerOf[entry] and subpages[ownerOf[entry]] or page
             local row = AddEntry(entry)
             if row then
                 row.key = entry.key or (entry.type == "minimap" and "minimap" or nil) -- read by the tests
@@ -652,21 +671,30 @@ local function Build()
         Problem(L["its options name no savedVariable, they are not built."])
         return
     end
-    for _, entry in ipairs(options) do
-        local missing = TYPES[entry.type] and Missing(entry)
-        if entry.type == "slider" and not (type(entry.key) == "string" and type(entry.default) == "number"
-                and type(entry.min) == "number" and type(entry.max) == "number" and entry.max > entry.min) then
-            Problem(L["the slider \"%s\" needs a key, a default, min and max (max above min), its row is left out."]
-                :format(tostring(entry.label or entry.key)))
-        elseif missing then
-            Problem(L["the %s \"%s\" needs %s, its row is left out."]:format(entry.type,
-                tostring(entry.label or entry.key or entry.command or entry.text), missing))
-        elseif TYPES[entry.type] then
-            entries[#entries + 1] = entry
-        else
-            Problem(L["the option type \"%s\" is unknown, its row is left out."]:format(tostring(entry.type)))
+    -- the entries of a list (ns.options, or the entries of a page) of a known type and complete; those of a page
+    -- follow their page entry. A page inside a page is left out.
+    local function Collect(list, owner)
+        for _, entry in ipairs(list) do
+            local missing = TYPES[entry.type] and Missing(entry)
+            if entry.type == "slider" and not (type(entry.key) == "string" and type(entry.default) == "number"
+                    and type(entry.min) == "number" and type(entry.max) == "number" and entry.max > entry.min) then
+                Problem(L["the slider \"%s\" needs a key, a default, min and max (max above min), its row is left out."]
+                    :format(tostring(entry.label or entry.key)))
+            elseif missing then
+                Problem(L["the %s \"%s\" needs %s, its row is left out."]:format(entry.type,
+                    tostring(entry.label or entry.key or entry.command or entry.text), missing))
+            elseif owner and entry.type == "page" then
+                Problem(L["the page \"%s\" is inside a page, it is left out."]:format(tostring(entry.label)))
+            elseif TYPES[entry.type] then
+                entries[#entries + 1] = entry
+                ownerOf[entry] = owner
+                if entry.type == "page" and entry.entries then Collect(entry.entries, entry) end
+            else
+                Problem(L["the option type \"%s\" is unknown, its row is left out."]:format(tostring(entry.type)))
+            end
         end
     end
+    Collect(options)
 
     local defaults = { minimap = true, minimapAngle = 200 }
     for key, value in pairs(options.defaults or {}) do defaults[key] = value end

@@ -313,6 +313,13 @@ local function PlaceBar(width)
     bar:SetWidth(width)
 end
 
+-- the size of the windows (option "searchScale", percent): the bar and what hangs from it; its place scales with it
+function ui.ApplyScale()
+    bar:SetScale((ns.db.searchScale or 100) / 100)
+    S.barTop = -UIParent:GetHeight() * BAR_TOP / bar:GetScale()
+    if bar:IsShown() then PlaceBar(bar:GetWidth()) end
+end
+
 -- the bar stands: the list folds open from nothing, the filter window comes (Base.lua opening order)
 local function Settle()
     bar.settled = true
@@ -351,7 +358,7 @@ local closing = { duration = W.CLOSE_TIME,
 }
 
 function ui.StartOpening()
-    S.barTop = -UIParent:GetHeight() * BAR_TOP
+    ui.ApplyScale()
     S.openedAt, S.closingAt, bar.settled, bar.halfOpen = GetTime(), nil, false, false
     -- the windows below start hidden, so the list folds open after the bar on every opening
     ui.list:Hide()

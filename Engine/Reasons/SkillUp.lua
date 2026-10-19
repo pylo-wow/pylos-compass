@@ -109,11 +109,11 @@ ns.RegisterReason({
             math.floor(D.RecipeSkillChance(entry) * 100 + 0.5))
         if D.CraftTimes(entry) > 0 then
             if MakesUpgrade(entry) then
-                text = text .. ns.DOT .. L["and you can wear it"]
+                text = text .. "\n" .. L["and you can wear it"]
             else
                 local cost, best = Cost(entry), Cheapest(entry.skillLine)
                 if cost and best and cost > best then
-                    text = text .. ns.DOT .. L["a point costs %d %% more than with the cheapest recipe"]:format(
+                    text = text .. "\n" .. L["a point costs %d %% more than with the cheapest recipe"]:format(
                         math.floor((cost / best - 1) * 100 + 0.5))
                 end
             end

@@ -690,21 +690,111 @@ function W.MarkRow(row, on, dimmed)
     row.icon:SetAlpha(on and 1 or ICON_REST)
 end
 
+-- Scroll bar for a list longer than the rows shown: a thin track with a bronze thumb at the right edge of `parent`
+-- (the search's list and the recommendations window). Clicking or dragging on it scrolls; the mouse wheel is the
+-- list's own. Rows leave W.SCROLL_ROOM free at their right while it shows.
+--   options.state()      total, shown at once, first shown (0-based)
+--   options.scrollTo(n)  the first to show (0-based), kept within 0 .. total - shown
+-- bar.Place() puts the thumb for the state now; showing and hiding the bar is the caller's (bar:SetShown).
+W.SCROLL_WIDTH = 6
+W.SCROLL_ROOM = W.SCROLL_WIDTH + 8
+local TRACK_ALPHA, THUMB, THUMB_MIN = 0.45, { 0.78, 0.62, 0.36, 0.9 }, 16
+function W.ScrollBar(parent, options)
+    local bar = CreateFrame("Frame", nil, parent)
+    bar:SetWidth(W.SCROLL_WIDTH + 6)
+    bar:SetPoint("TOPRIGHT", -4, -8)
+    bar:SetPoint("BOTTOMRIGHT", -4, 8)
+    bar:EnableMouse(true)
+    local track = bar:CreateTexture(nil, "BACKGROUND")
+    track:SetColorTexture(0, 0, 0, TRACK_ALPHA)
+    track:SetWidth(W.SCROLL_WIDTH)
+    track:SetPoint("TOP")
+    track:SetPoint("BOTTOM")
+    local thumb = bar:CreateTexture(nil, "ARTWORK")
+    thumb:SetColorTexture(THUMB[1], THUMB[2], THUMB[3], THUMB[4])
+    thumb:SetWidth(W.SCROLL_WIDTH)
+    bar.track, bar.thumb = track, thumb
+    bar:Hide()
+
+    function bar.Place()
+        if not bar:IsShown() then return end
+        local height = bar:GetHeight()
+        local total, visible, first = options.state()
+        local size = math.max(height * visible / math.max(total, 1), THUMB_MIN)
+        thumb:SetHeight(size)
+        thumb:ClearAllPoints()
+        thumb:SetPoint("TOP", track, "TOP", 0, -(height - size) * first / math.max(total - visible, 1))
+    end
+
+    -- dragging: the cursor's place on the track picks the shown part (every frame while held)
+    local function ToCursor()
+        local _, y = GetCursorPosition()
+        local total, visible = options.state()
+        local fraction = (bar:GetTop() - y / bar:GetEffectiveScale()) / bar:GetHeight()
+        options.scrollTo(math.max(0, math.min(math.floor(fraction * (total - visible) + 0.5), total - visible)))
+    end
+    bar:SetScript("OnMouseDown", function(self)
+        self:SetScript("OnUpdate", ToCursor)
+        ToCursor()
+    end)
+    bar:SetScript("OnMouseUp", function(self) self:SetScript("OnUpdate", nil) end)
+    bar:SetScript("OnHide", function(self) self:SetScript("OnUpdate", nil) end)
+    return bar
+end
+
+-- A detail line below a reason or a need: gray, indented. The tooltip would wrap a long one without the indent, so it
+-- is broken at words here (the ruler measures in the tooltip's font) and every piece gets the indent; the text
+-- unbroken, wrapped by the tooltip, if the ruler cannot measure.
+local DETAIL_INDENT, DETAIL_WIDTH = "   ", 300
+local ruler
+local function AddDetail(tooltip, text)
+    ruler = ruler or UIParent:CreateFontString(nil, "ARTWORK", "GameTooltipText")
+    ruler:SetText(DETAIL_INDENT .. text)
+    local whole = ruler:GetStringWidth() or 0
+    if whole <= 0 or whole <= DETAIL_WIDTH then
+        tooltip:AddLine(DETAIL_INDENT .. text, SUB[1], SUB[2], SUB[3], whole <= 0)
+        return
+    end
+    local line = ""
+    for word in text:gmatch("%S+") do
+        local longer = line == "" and word or (line .. " " .. word)
+        ruler:SetText(DETAIL_INDENT .. longer)
+        if line ~= "" and ruler:GetStringWidth() > DETAIL_WIDTH then
+            tooltip:AddLine(DETAIL_INDENT .. line, SUB[1], SUB[2], SUB[3])
+            line = word
+        else
+            line = longer
+        end
+    end
+    if line ~= "" then tooltip:AddLine(DETAIL_INDENT .. line, SUB[1], SUB[2], SUB[3]) end
+end
+
 -- Reasons in a tooltip: "Why" in gold, reasons in white; a quest's "Still to do"
 -- the same (needs: { text, from }, from in gray below); what a click does in
--- green. Each part only if non-empty.
+-- green. Each part only if non-empty. A reason may carry details after a newline (the way to it, what it brings):
+-- one gray line each below it, as "from" is.
 function W.AddWhy(tooltip, why, needs, click)
     if why and why[1] then
         tooltip:AddLine(" ")
         tooltip:AddLine(L["Why"], GOLD[1], GOLD[2], GOLD[3])
-        for _, line in ipairs(why) do tooltip:AddLine(line, WHITE[1], WHITE[2], WHITE[3], true) end
+        for _, line in ipairs(why) do
+            local first = true
+            for part in (line .. "\n"):gmatch("(.-)\n") do
+                if first then
+                    tooltip:AddLine(part, WHITE[1], WHITE[2], WHITE[3], true)
+                    first = false
+                elseif part ~= "" then
+                    AddDetail(tooltip, (part:gsub("^%l", string.upper)))
+                end
+            end
+        end
     end
     if needs and needs[1] then
         tooltip:AddLine(" ")
         tooltip:AddLine(L["Still to do"], GOLD[1], GOLD[2], GOLD[3])
         for _, need in ipairs(needs) do
             tooltip:AddLine(need.text, WHITE[1], WHITE[2], WHITE[3], true)
-            if need.from then tooltip:AddLine("   " .. L["from %s"]:format(need.from), SUB[1], SUB[2], SUB[3], true) end
+            if need.from then AddDetail(tooltip, L["from %s"]:format(need.from)) end
         end
     end
     if click then

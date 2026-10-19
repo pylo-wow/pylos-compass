@@ -101,9 +101,9 @@ function ui.FillTooltip(tooltip, entry)
         C_Item.RequestLoadItemDataByID(entry.itemID)
         tooltip:SetItemByID(entry.itemID)
         tooltip.pendingItem = not C_Item.IsItemDataCachedByID(entry.itemID) and entry.itemID or nil
-        -- a trade good: where it is gathered, from Pylos GatherInfo if installed and the option is on
+        -- a trade good: where it is gathered, from Pylos GatherInfo if installed and it wants to
         -- (noGatherInfo stops its own hook)
-        local gather = ns.db.gatherInfo and ns.GatherInfo()
+        local gather = ns.GatherInfo()
         if gather and (not gather.Wanted or gather.Wanted()) then
             gather.AddLine(tooltip, entry.itemID)
         end

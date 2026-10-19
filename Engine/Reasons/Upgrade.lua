@@ -9,7 +9,7 @@ local L = ns.L
 -- change filled the lists). So a two-hander 10 % better comes before a ring 50 % better. What you wear is none, one in
 -- your bags is Equip.lua's. How easy it is to get is its reach (reach.Item); one only luck brings (a world drop) is
 -- none.
--- The row: "+14 %  ·  Strength, Crit" (against what you wear there) or "Free slot  ·  ...".
+-- The row: "+12 Strength, +8 Stamina" (against what you wear there) or "Free slot  ·  ...".
 -- ns.UpgradeOf is the one check of "an upgrade for you": this reason, Equip.lua, a quest's rewards (QuestLog.lua), the
 -- learning (Learning\Upgrades.lua), the nudges and the search's rows ask it, with the same threshold.
 
@@ -36,12 +36,37 @@ function ns.UpgradeStrength(r)
     return math.log(1 + share / 2.5) / math.log(2) / 2
 end
 
--- a comparison in words: "+14 %  ·  Strength, Crit" or "Free slot  ·  ..." (the row's note and the item tooltip line)
+-- what the item changes, in words: "+12 Strength, +8 Stamina" (the stats worth most first, in the stats' own units;
+-- damage per second for a weapon), "Free slot  ·  ..." for an empty slot (the row's note and the item tooltip line)
+local UNIT_NAMES = { DPS = "DPS", RDPS = "Ranged DPS" }
+-- "+12", "+3.2"; nil where it rounds to nothing (a weapon 0.04 damage per second better)
+local function Amount(amount)
+    amount = math.floor(amount * 10 + 0.5) / 10
+    if amount == 0 then return nil end
+    return amount == math.floor(amount) and ("%+d"):format(amount) or ("%+.1f"):format(amount)
+end
+local function Stats(r)
+    local parts = {}
+    for i = 1, math.min(#r.top, TOP) do
+        local key = r.top[i]
+        local amount = r.topAmounts and r.topAmounts[key] and Amount(r.topAmounts[key])
+        local name = UNIT_NAMES[key] or ns.STAT_NAMES[key] or key
+        parts[i] = amount and ("%s %s"):format(amount, name) or name
+    end
+    return table.concat(parts, ", ")
+end
 function ns.UpgradeText(r)
-    local names = {}
-    for i = 1, math.min(#r.top, TOP) do names[i] = ns.STAT_NAMES[r.top[i]] or r.top[i] end
-    local head = r.free and L["Free slot"] or r.percent and ("+%d %%"):format(r.percent + 0.5) or L["Better"]
-    return #names > 0 and (head .. ns.DOT .. table.concat(names, ", ")) or head
+    local stats = Stats(r)
+    if r.free then return stats ~= "" and (L["Free slot"] .. ns.DOT .. stats) or L["Free slot"] end
+    return stats ~= "" and stats or L["Better"]
+end
+-- the tooltip's reason: what it beats, "Better than your Linen Belt: +2 Strength, +2 Agility" (UpgradeText for a free
+-- slot or a worn item the data does not name)
+function ns.UpgradeWhy(r)
+    local worn = not r.free and r.replaces and D.NameEN("item", r.replaces)
+    if not worn then return ns.UpgradeText(r) end
+    local stats = Stats(r)
+    return stats ~= "" and L["Better than your %s: %s"]:format(worn, stats) or L["Better than your %s"]:format(worn)
 end
 
 ns.RegisterReason({
@@ -81,7 +106,6 @@ ns.RegisterReason({
     end,
     why = function(entry)
         local r = ns.UpgradeOf(entry.itemID)
-        if not r then return nil end
-        return L["Makes you %.1f %% stronger"]:format(r.share)
+        return r and ns.UpgradeWhy(r) or nil
     end,
 })

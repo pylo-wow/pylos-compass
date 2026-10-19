@@ -95,7 +95,7 @@ local function SituationKey() return "\1" .. memory.Situation() end
 local chosenSince = {} -- IDs chosen since Reasons.lua last took them
 function memory.Chose(id, amount)
     local db = DB()
-    if not db or not id or not Accept(id) then return end
+    if not db or not id or not Accept(id) or not D.Learns() then return end
     local chosen, now = db.chosen, time()
     for _, key in ipairs({ "", SituationKey() }) do
         chosen[key] = chosen[key] or {}
@@ -193,7 +193,7 @@ end
 
 function memory.Did(id)
     local db = DB()
-    if not db or not id or not Accept(id) then return end
+    if not db or not id or not Accept(id) or not D.Learns() then return end
     Bump(db.did, id, time(), HALF_LIFE)
     Changed()
     Acted(id)
@@ -208,6 +208,7 @@ local boughtNow = {}
 ns.On("MERCHANT_CLOSED", function()
     local db = DB()
     if not db or not next(boughtNow) then return end
+    if not D.Learns() then wipe(boughtNow) return end
     local now = time()
     for itemID, before in pairs(boughtNow) do
         local count = C_Item.GetItemCount(itemID)
@@ -269,7 +270,7 @@ end)
 -- kind "do" (default) or "know"
 function memory.Skipped(id, amount, kind)
     local db = DB()
-    if not db or not id then return end
+    if not db or not id or not D.Learns() then return end
     Bump(db.skipped[kind or "do"], id, time(), SKIP_HALF_LIFE, amount)
     Changed()
 end
@@ -327,6 +328,26 @@ function memory.Forget(id)
     end
     db.did[id] = nil
     for _, kind in ipairs(KINDS) do db.skipped[kind][id] = nil end
+    Changed()
+end
+
+-- Forgets what the search taught the engine: what you chose there and what its lists passed over (not hiding)
+function memory.ForgetSearch()
+    local db = DB()
+    if not db then return end
+    wipe(db.chosen)
+    wipe(db.skipped.know)
+    wipe(chosenSince)
+    Changed()
+end
+
+-- Forgets what the recommendations learned: what you did and bought, what the window passed over (not hiding)
+function memory.ForgetDone()
+    local db = DB()
+    if not db then return end
+    wipe(db.did)
+    wipe(db.bought)
+    wipe(db.skipped["do"])
     Changed()
 end
 

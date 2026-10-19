@@ -15,12 +15,12 @@ For WoW Forever (Interface 16001). Needs no other addon. Pylos GatherInfo is opt
 ## Recommendations
 
 - A window with tabs (all, class, gear, professions, quests, supplies, dungeons): what is worth doing now, and why.
-- Nudges: a quiet dot, a short note by the minimap or a loud note, only for what matters and is new to you, and only in a pause. Each can be switched off.
+- Hints: a quiet dot, a short note by the minimap or the same note with a sound, only for what matters and is new to you, and only in a pause. Each kind can be set to off, quiet, note or alert (a note with a sound) on its own page of the settings.
 - A rating (good, bad, don't suggest) in each entry's menu teaches it what you want.
 
 ## Use
 
-- **Left-click the minimap button** or `/pcompass`: the search. **Middle-click:** the recommendations. **Right-click** or `/pcompass options`: the options (in the game options under *AddOns*, *Pylos Compass*).
+- **Left-click the minimap button** or `/pcompass`: the recommendations (while the button glows, first the new hint as a message you can rate). **Middle-click:** the search. **Right-click** or `/pcompass options`: the options (in the game options under *AddOns*, *Pylos Compass*).
 - Both parts have a switch in the options; switched off, a part does nothing and costs nothing.
 
 ## Source layout
@@ -34,7 +34,7 @@ For WoW Forever (Interface 16001). Needs no other addon. Pylos GatherInfo is opt
 | `You\` | the current character: zone, bags, quest log, flight points, hearthstone, class and ratings |
 | `Engine\` | what is worth doing or looking up: reasons, memory, learning, the item valuer |
 | `Search\` | the search bar: sources (one per category), links, filters, tools, UI |
-| `Advice\` | the recommendations window and the nudges |
+| `Advice\` | the recommendations window and the hints |
 
 `PylosCompass.toc` lists the files in load order, one block per folder.
 

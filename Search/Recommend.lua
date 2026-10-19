@@ -33,12 +33,11 @@ rec.IsHidden = R.IsHidden
 rec.Knows = R.Knows
 rec.Forget = R.Forget
 rec.Log = function(...) return R.Log(...) end -- R.Log can be replaced after load: look it up at call time
--- an item that is an upgrade for you: "+14 %" or "Free slot"; nil if none (a row's state)
+-- an item that is an upgrade for you: what it changes ("+12 Strength, +8 Stamina", "Free slot  ·  ..."); nil if none
+-- (a row's state)
 rec.Upgrade = function(itemID)
     local r = itemID and R.UpgradeOf(itemID)
-    if not r then return nil end
-    if r.free then return L["Free slot"] end
-    return r.percent and ("+%d %%"):format(r.percent + 0.5) or L["Better"]
+    return r and R.UpgradeText(r) or nil
 end
 
 -- A suggestion's reason as its row's text (UI\List.lua): the strongest reason's note ("Your target",

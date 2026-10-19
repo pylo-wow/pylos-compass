@@ -43,7 +43,7 @@ end
 -- remembers a choice after typing text (may be empty); amount 1 for a choice, 0.5 for only looking
 function memory.Chose(id, amount, text)
     local db = DB()
-    if not db or not id or (memory.accept and not memory.accept(id)) then return end
+    if not db or not id or not ns.data.Learns() or (memory.accept and not memory.accept(id)) then return end
     local learned, now = db.learned, time()
     local function Into(key, exact)
         learned[key] = learned[key] or {}

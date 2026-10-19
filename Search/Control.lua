@@ -134,14 +134,27 @@ local function SourcesChanged()
     if ui.bar:IsShown() then ns.view.Reset() end
 end
 
+-- a category shown or hidden (the right-click menu of its tab, the button of the options); stored as "source_<key>"
+function ns.SetSource(key, shown)
+    ns.SetOption("source_" .. key, shown)
+    SourcesChanged()
+end
+
+local function ShowAllSources()
+    for _, source in ipairs(ns.sources) do ns.SetOption("source_" .. source.key, true) end
+    SourcesChanged()
+end
+
 -- Reset is irreversible: confirm first. Clears only the search's own memory.
 StaticPopupDialogs["PYLOSCOMPASS_RESET_WEIGHTING"] = {
-    text = L["Reset the search's weighting? It forgets which results you chose for what you typed. What the " ..
-        "recommendations learned stays."],
+    text = L["Reset what the search learned? It forgets which results you chose for what you typed and what you " ..
+        "chose there. What the recommendations learned stays."],
     button1 = YES,
     button2 = NO,
     OnAccept = function()
         ns.memory.Reset()
+        ns.engine.memory.ForgetSearch()
+        ns.engine.learning.Forget("know")
         if ui.bar:IsShown() and not S.detail and not S.linked then ns.view.Refresh() end
     end,
     timeout = 0,
@@ -153,40 +166,38 @@ StaticPopupDialogs["PYLOSCOMPASS_RESET_WEIGHTING"] = {
 -- the memory keeps only what the search knows (not Auto Shot or quest item spells)
 ns.memory.accept = function(id) return ns.index.EntryByID(id) ~= nil end
 
--- Core\Options.lua builds the options page (head, minimap button) from this: defaults, load step and rows
+-- Core\Options.lua builds the options page (head, minimap button) from these: defaults and load step in
+-- ns.options, the rows in ns.rows (key, background, clickOutside, showCategories, weighting), put in order there
 ns.options = {
     -- filtersOpen: pin of the filter window
     defaults = { defaultKeySet = false, learned = {}, filtersOpen = false },
     onLoad = function()
         ns.memory.Prune()
         ui.ApplyLook()
+        ui.ApplyScale()
     end,
-
-    { type = "keybinding", command = COMMAND },
-    { type = "slider", key = "backgroundAlpha", label = L["Background"], default = BACKGROUND,
-      min = 0, max = 100, step = 5, format = function(value) return ("%d %%"):format(value) end,
-      tooltip = L["How strongly the background covers the game. Border and text stay."],
-      onChange = ui.ApplyLook },
-    { type = "dropdown", key = "clickOutside", label = L["Click outside"], default = "release",
-      values = {
-          { "release", L["Release the keyboard"] },
-          { "close", L["Close the search"] },
-          { "nothing", L["Nothing"] },
-      },
-      tooltip = L["A click anywhere outside the search. Released, the keys go to the game (chat, walking) and a " ..
-          "click into the bar takes them back. The click still works in the game."] },
-    -- grayed out while Pylos GatherInfo is not loaded
-    { type = "checkbox", key = "gatherInfo", label = L["Where to get it (Pylos GatherInfo)"], default = true,
-      enabledIf = function() return ns.GatherInfo() ~= nil end,
-      tooltip = L["The tooltips of the search say where a trade good is gathered. Needs the addon Pylos GatherInfo."] },
-    { type = "button", label = L["Weighting"], text = L["Reset"],
-      tooltip = L["The search forgets which results you chose for what you typed. What the recommendations learned " ..
-          "stays."],
-      func = function() StaticPopup_Show("PYLOSCOMPASS_RESET_WEIGHTING") end },
-
-    { type = "header", label = L["Categories"] },
 }
-for _, source in ipairs(ns.sources) do
-    table.insert(ns.options, { type = "checkbox", key = "source_" .. source.key, label = source.name,
-        default = true, tooltip = source.hint, onChange = SourcesChanged })
-end
+ns.rows = {}
+
+ns.rows.key = { type = "keybinding", command = COMMAND }
+ns.rows.background = { type = "slider", key = "backgroundAlpha", label = L["Background"], default = BACKGROUND,
+    min = 0, max = 100, step = 5, format = function(value) return ("%d %%"):format(value) end,
+    tooltip = L["How strongly the background covers the game. Border and text stay."],
+    onChange = ui.ApplyLook }
+ns.rows.clickOutside = { type = "dropdown", key = "clickOutside", label = L["Click outside"], default = "release",
+    values = {
+        { "release", L["Release the keyboard"] },
+        { "close", L["Close the search"] },
+        { "nothing", L["Nothing"] },
+    },
+    tooltip = L["A click anywhere outside the search. Released, the keys go to the game (chat, walking) and a " ..
+        "click into the bar takes them back. The click still works in the game."] }
+ns.rows.weighting = { type = "button", label = L["Learned by the search"], text = L["Reset"],
+    tooltip = L["The search forgets which results you chose for what you typed and what you chose there. What the " ..
+        "recommendations learned stays."],
+    func = function() StaticPopup_Show("PYLOSCOMPASS_RESET_WEIGHTING") end }
+-- the categories are shown unless hidden: source_<key> = false
+for _, source in ipairs(ns.sources) do ns.options.defaults["source_" .. source.key] = true end
+ns.rows.showCategories = { type = "button", label = L["Search categories"], text = L["Show all hidden"],
+    tooltip = L["Brings back the categories you hid with a right-click on their tab above the search."],
+    func = ShowAllSources }

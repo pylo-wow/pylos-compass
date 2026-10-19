@@ -141,7 +141,7 @@ function ui.ShowMenu(entry, fromDetail, byKey)
     local link = ui.EntryLink(target)
     if link and link:find("|H", 1, true) then -- a real hyperlink, not the "item:ID" stand-in of an uncached item
         act[#act + 1] = { L["Link in chat"], function()
-            ns.Close()
+            ns.input.Unfocus() -- the chat takes the keyboard, the search stays open
             local chat = rawget(_G, "ChatFrameUtil")
             if chat and chat.GetActiveWindow and chat.GetActiveWindow() then
                 chat.InsertLink(link)
@@ -175,5 +175,5 @@ end
 
 -- the menu of a category tab: hide it (the options' switch brings it back)
 function ui.ShowCategoryMenu(source)
-    OpenMenu({ { { L["Hide category"], function() ns.SetOption("source_" .. source.key, false) end } } })
+    OpenMenu({ { { L["Hide category"], function() ns.SetSource(source.key, false) end } } })
 end

@@ -18,6 +18,8 @@ local W = ns.widgets -- shared with the search window
 -- buttons cannot change in combat.
 
 local ROWS = 10
+local SCROLL_STEP = 2   -- rows one tick of the mouse wheel moves
+local SEEN_AFTER = 1.5  -- seconds the wheel rests before the rows it stopped on count as seen
 local ALL = 999           -- a topic's list in full (its tab counts it)
 local PER_DOMAIN = 4      -- at most this many of one kind per list
 local AWAY = 10 * 60      -- seconds closed: then it opens at the tab worth most, else where you were
@@ -147,7 +149,9 @@ local function Tooltip(row, waited)
     tip:SetOwner(list, "ANCHOR_NONE")
     tip:ClearAllPoints()
     -- beside the window, on the side with room
-    if (list:GetRight() or 0) + 330 > (UIParent:GetRight() or 0) then
+    -- (the window may be scaled: its right edge in the screen's units)
+    local toScreen = list:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    if (list:GetRight() or 0) * toScreen + 330 > (UIParent:GetRight() or 0) then
         tip:SetPoint("TOPRIGHT", list, "TOPLEFT", -W.TIP_GAP, 0)
     else
         tip:SetPoint("TOPLEFT", list, "TOPRIGHT", W.TIP_GAP, 0)
@@ -237,11 +241,19 @@ local function Menu(row)
     window.menu.Open({ look, act }, nil, rate)
 end
 
+-- a row's place; right: room kept free at its right (the scroll bar's, while the list scrolls)
+local function AnchorRow(row, right)
+    local top = -(6 + (row.index - 1) * ROW_HEIGHT)
+    row:ClearAllPoints()
+    row:SetPoint("TOPLEFT", 6, top)
+    row:SetPoint("TOPRIGHT", -6 - right, top)
+end
+
 local function Row(list, i)
     local row = CreateFrame("Frame", nil, list)
     row:SetHeight(ROW_HEIGHT)
-    row:SetPoint("TOPLEFT", 6, -(6 + (i - 1) * ROW_HEIGHT))
-    row:SetPoint("TOPRIGHT", -6, -(6 + (i - 1) * ROW_HEIGHT))
+    row.index = i
+    AnchorRow(row, 0)
     -- icon, quality, count, note symbol, status, name, category (Widgets.lua)
     W.RowParts(row, ROW_HEIGHT)
     -- dot for quiet-nudged entries (Push.lua)
@@ -259,6 +271,8 @@ local function Row(list, i)
     row.secure = secure
     -- dragging a row moves the window
     secure:RegisterForDrag("LeftButton")
+    secure:EnableMouseWheel(true)
+    secure:SetScript("OnMouseWheel", function(_, delta) window.Scroll(window, delta) end)
     secure:SetScript("OnDragStart", function() window:GetScript("OnDragStart")(window) end)
     secure:SetScript("OnDragStop", function() window:GetScript("OnDragStop")(window) end)
     secure:SetScript("OnEnter", function()
@@ -317,15 +331,22 @@ local function Describe(entry)
     return table.concat(parts, DOT)
 end
 
--- fills a row: the item or nothing; arms its secure button
-local function Fill(row, item, rank)
-    row.item = item
+-- shown to you: Learning watches whether you follow it (only what you saw counts), also what the row carries
+local function MarkSeen(row)
+    local item = row.item
+    if not item then return end
+    ns.Shown(item.entry, nil, row.rank)
+    for _, carried in ipairs(item.carries or NONE) do ns.Shown(carried, nil, row.rank) end
+end
+
+-- fills a row: the item or nothing; arms its secure button. scrolling: the rows only pass by, they count as seen
+-- once the wheel rests (Scroll)
+local function Fill(row, item, rank, scrolling)
+    row.item, row.rank = item, rank
     row:SetShown(item ~= nil)
     if not item then return end
     local entry = item.entry
-    -- shown to you: Learning watches whether you follow it (only what you saw counts), also what the row carries
-    ns.Shown(entry, nil, rank)
-    for _, carried in ipairs(item.carries or NONE) do ns.Shown(carried, nil, rank) end
+    if not scrolling then MarkSeen(row) end
     if entry.itemID and not C_Item.IsItemDataCachedByID(entry.itemID) then
         C_Item.RequestLoadItemDataByID(entry.itemID)
     end
@@ -405,6 +426,19 @@ local function FollowHeight(elapsed)
     return moving
 end
 
+-- the rows from the scroll offset (the list is longer than the rows: the wheel or the scroll bar scrolls it)
+local function FillRows(scrolling)
+    local list, offset = window.list or NONE, window.offset or 0
+    -- the rows leave room for the scroll bar while it shows (not in combat: the rows hold secure buttons)
+    local more = #list > ROWS
+    if window.scroll:IsShown() ~= more and not InCombatLockdown() then
+        window.scroll:SetShown(more)
+        for _, row in ipairs(window.rows) do AnchorRow(row, more and W.SCROLL_ROOM or 0) end
+    end
+    for i, row in ipairs(window.rows) do Fill(row, list[offset + i], offset + i, scrolling) end
+    window.scroll.Place()
+end
+
 local function Show()
     if InCombatLockdown() then return end -- secure buttons are locked
     D.RefreshOwned()
@@ -447,13 +481,18 @@ local function Show()
         for _, item in ipairs(rest) do first[#first + 1] = item end
         list = first
     end
-    for i, row in ipairs(window.rows) do Fill(row, list[i], i) end
+    -- a new tab or subtopic starts at the top; a list that grew or shrank keeps the place as far as it can
+    local view = current .. "/" .. (set and set.key or "")
+    if window.view ~= view then window.view, window.offset = view, 0 end
+    window.list = list
+    window.offset = math.max(0, math.min(window.offset or 0, #list - ROWS))
+    FillRows()
     window.empty:SetShown(#list == 0)
     for _, tab in ipairs(window.tabs) do
         tab.count = #(lists[tab.key] or NONE)
         W.LightTab(tab, tab.key == current, tab.count == 0)
-        -- count on the icon; more than a list shows as "10+" (an uncapped number only says "many")
-        local number = tab.count > ROWS and (ROWS .. "+") or tab.count > 0 and tostring(tab.count) or ""
+        -- count on the icon; a very long list shows as "99+"
+        local number = tab.count > 99 and "99+" or tab.count > 0 and tostring(tab.count) or ""
         tab.number:SetText(number)
         tab.dot:SetShown(ns.push.QuietTopic(tab.key))
     end
@@ -467,6 +506,35 @@ local function Show()
     window.heightMoving = true
 end
 
+-- shows the rows from a first one (0-based): the wheel and the scroll bar come here
+local function ScrollTo(first)
+    local list = window.list or NONE
+    first = math.max(0, math.min(first, #list - ROWS))
+    if first == (window.offset or 0) then return end
+    window.offset = first
+    hovered = nil
+    tip:Hide()
+    FillRows(true)
+    -- the rows the wheel stops on were seen, those that flew by were not
+    local scrolledAt = GetTime()
+    window.scrolledAt = scrolledAt
+    C_Timer.After(SEEN_AFTER, function()
+        if window.scrolledAt ~= scrolledAt or not window:IsShown() then return end
+        window.scrolledAt = nil
+        for _, row in ipairs(window.rows) do MarkSeen(row) end
+    end)
+    for _, row in ipairs(window.rows) do -- the row under the mouse changed: its tooltip follows
+        if row:IsShown() and row.secure:IsMouseOver() then
+            hovered = row
+            Mark(row, true)
+            Tooltip(row)
+        end
+    end
+end
+
+-- the wheel moves the rows over the list (the rows and the window both take it: a row is under the mouse)
+local function Scroll(_, delta) ScrollTo((window.offset or 0) - delta * SCROLL_STEP) end
+
 -- re-anchor at the top left corner after moving (StartMoving anchors anew)
 local function StartMoving() window:StartMoving() end
 local function StopMoving()
@@ -477,22 +545,85 @@ local function StopMoving()
     ns.db.window = { left, top }
 end
 
+-- where the window stands until it is dragged: its top right corner at the top left corner of the minimap button's
+-- default spot (the kit puts the button on the minimap's rim at the angle of options.defaults.minimapAngle, default
+-- 200 degrees, 31 units wide); the spot, not the button, so a dragged button does not move it. With no room there
+-- (the minimap moved to an edge or a corner: the window, its tabs above and the subtopic tabs left of it would not
+-- be all on the screen) it stands at a fixed place instead, from the top right corner of the screen.
+local BUTTON_SIZE, BUTTON_GAP = 31, 2
+local TABS_ABOVE, TABS_LEFT = TAB + 4, TAB + W.TAB_OUT + 4
+local FIXED_RIGHT, FIXED_TOP = -260, -120
+
+local function Placed()
+    local saved = ns.db.window
+    return saved ~= nil and type(saved[1]) == "number"
+end
+
+local function DefaultPlace()
+    local angle = math.rad(D.options.defaults.minimapAngle or 200)
+    local radius = Minimap:GetWidth() / 2 + 5
+    local x = math.cos(angle) * radius - BUTTON_SIZE / 2 - BUTTON_GAP
+    local y = math.sin(angle) * radius + BUTTON_SIZE / 2
+    -- in the screen's units (UIParent's), the window at its own size; offsets count in the window's own scale
+    local toScreen = Minimap:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    local size = window:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    local centerX, centerY = Minimap:GetCenter()
+    local right, top = centerX and (centerX + x) * toScreen, centerY and (centerY + y) * toScreen
+    window:ClearAllPoints()
+    if ns.FitsScreen(right, top, WIDTH * size, (12 + ROWS * ROW_HEIGHT) * size, TABS_LEFT * size, TABS_ABOVE * size) then
+        window:SetPoint("TOPRIGHT", Minimap, "CENTER", x * toScreen / size, y * toScreen / size)
+    else
+        window:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", FIXED_RIGHT / size, FIXED_TOP / size)
+    end
+end
+
+-- the options' button: forget where it was dragged to, an open window moves back at once. In combat the window
+-- cannot move (its row buttons are secure); it is closed then, and the next opening puts it at its default place.
+function ns.ResetPosition()
+    ns.db.window = {}
+    if window and not InCombatLockdown() then DefaultPlace() end
+end
+
+-- the size of the window (option "adviceScale", percent); its top left corner stays where it is on the screen (the
+-- default place counts anew: its corner stays at the button). Not in combat (as above): the next opening applies it.
+function ns.ApplyScale()
+    if not window or InCombatLockdown() then return end
+    local old, new = window:GetScale(), (ns.db.adviceScale or 100) / 100
+    if math.abs(old - new) < 0.001 then return end
+    if not Placed() then
+        window:SetScale(new)
+        DefaultPlace()
+        return
+    end
+    local left, top = window:GetLeft(), window:GetTop()
+    window:SetScale(new)
+    if left and top then
+        left, top = left * old / new, top * old / new
+        window:ClearAllPoints()
+        window:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+        ns.db.window = { left, top }
+    end
+end
+
 local function Build()
     window = CreateFrame("Frame", "PylosCompassWindow", UIParent)
     window:SetSize(WIDTH, 12 + ROWS * ROW_HEIGHT)
     window:SetFrameStrata("DIALOG")
     window:SetFrameLevel(10) -- room below for its frame and the tabs
     window:SetClampedToScreen(true)
+    window:SetScale((ns.db.adviceScale or 100) / 100)
     window:SetMovable(true)
+    window:EnableMouseWheel(true)
+    window:SetScript("OnMouseWheel", Scroll)
+    window.Scroll = Scroll
     window:EnableMouse(true)
     window:RegisterForDrag("LeftButton")
     window:SetScript("OnDragStart", StartMoving)
     window:SetScript("OnDragStop", StopMoving)
-    local saved = ns.db.window
-    if saved and type(saved[1]) == "number" then
-        window:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", saved[1], saved[2])
+    if Placed() then
+        window:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", ns.db.window[1], ns.db.window[2])
     else
-        window:SetPoint("TOPRIGHT", Minimap, "BOTTOMLEFT", -20, -60)
+        DefaultPlace()
     end
     W.SetBackground(Background())
     window.background = Background()
@@ -558,6 +689,11 @@ local function Build()
 
     window.rows = {}
     for i = 1, ROWS do window.rows[i] = Row(window, i) end
+    -- the scroll bar of a list longer than the rows, the search's (Widgets.lua); the rows leave room for it (FillRows)
+    window.scroll = W.ScrollBar(window, {
+        state = function() return #(window.list or NONE), ROWS, window.offset or 0 end,
+        scrollTo = ScrollTo,
+    })
     window.empty = W.Empty(window)
     window.empty:SetText(L["Nothing to suggest here right now"])
 
@@ -580,6 +716,7 @@ local function Build()
     window.nudged = {} -- entry -> true: quiet-nudged, shown first with the dot
     -- open: fades in, tabs rise, height set at once (a cut-short close resumes from its alpha)
     function window.Open()
+        if not window:IsShown() then window.offset = 0 end -- opened again: from the top
         -- the glow told of a quiet nudge: open at its tab, no subtopic hiding it
         local topic = ns.push.WindowOpened()
         if topic then
@@ -602,6 +739,10 @@ local function Build()
         end
         window.closingAt = nil
         local back = window:IsShown()
+        if not back then
+            ns.ApplyScale() -- a size set in combat
+            if not Placed() then DefaultPlace() end -- the minimap may have moved
+        end
         window.openFrom = back and window:GetAlpha() or 0
         window.openedAt = GetTime()
         if not back then

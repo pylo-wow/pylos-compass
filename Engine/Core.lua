@@ -16,6 +16,9 @@ D.engine = ns
 
 ns.Character = D.CharacterKey
 
+-- The option "Learn from what I do" (Core\Options.lua): off, nothing new is remembered about your choices and actions.
+function D.Learns() return not (D.db and D.db.learn == false) end
+
 -- A client format ("%s dies, you gain %d experience.") as a Lua pattern catching its texts in order;
 -- numbers: catch the numbers too (else only matched); whole: the text must end there.
 function ns.FormatPattern(format, numbers, whole)

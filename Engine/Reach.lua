@@ -59,7 +59,9 @@ local function Way(place)
     local name = MapName((D.PlaceParts(place)))
     local shown = math.max(1, math.floor(minutes + 0.5))
     local words = rides and L["~%d min via %s"]:format(shown, rides) or L["~%d min away"]:format(shown)
-    return minutes, words .. (name and (", " .. name) or "")
+    -- (a ride named after the place says it already: "via Alterac Mountains - Zephras Isle")
+    local named = name and not (rides and rides:find(name, 1, true))
+    return minutes, words .. (named and (", " .. name) or "")
 end
 
 -- A place (packed: uiMapID * 1000000 + x * 1000 + y) as reach with `extra` minutes of doing there: factor, words,
@@ -286,7 +288,7 @@ local function QuestReward(entry)
                 end
             end
             if factor and (not best or factor > best) then
-                best, bestWords = factor, format:format(name, steps) .. (words and (", " .. words) or "")
+                best, bestWords = factor, format:format(name, steps) .. (words and ("\n" .. words) or "")
                 bestQuest = logged and ("q:" .. questID) or nil
                 bestSource = "q:" .. questID
             end
@@ -322,7 +324,7 @@ local function Item(entry)
             if sold > best then
                 best, bestWords, bestVia, bestSource = sold,
                     (limited and L["sold by %s, limited stock"] or L["sold by %s"]):format(vendor.name)
-                    .. ", " .. soldWords, nil, nil
+                    .. "\n" .. soldWords, nil, nil
             end
         end
     end
@@ -340,7 +342,7 @@ local function Item(entry)
             if factor > best then
                 best, bestWords, bestVia, bestSource = factor,
                     L["drops from %s (%d %%), %s"]:format(boss.name, math.max(chance, 1), dungeon.name)
-                    .. (words and (", " .. words) or ""), nil, nil
+                    .. (words and ("\n" .. words) or ""), nil, nil
             end
         end
     end

@@ -24,14 +24,13 @@ ns.RegisterReason({
         if not r then return nil end
         return math.max(1, ns.UpgradeStrength(r))
     end,
-    reach = function() return ns.reach.NOW, nil end,
+    reach = function() return ns.reach.NOW, L["in your bags"] end,
     note = function(entry)
         local r = Upgrade(entry)
         return r and (L["Equip"] .. ": " .. ns.UpgradeText(r)) or nil
     end,
     why = function(entry)
         local r = Upgrade(entry)
-        if not r then return nil end
-        return L["In your bags: makes you %.1f %% stronger"]:format(r.share)
+        return r and ns.UpgradeWhy(r) or nil
     end,
 })

@@ -37,6 +37,7 @@ local function Judged()
 end
 
 local function Observe(itemID, hit, evidence, words)
+    if not D.Learns() then return end
     local judged = Judged()
     if judged then judged[itemID] = time() end
     watched[itemID] = nil

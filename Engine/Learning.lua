@@ -59,7 +59,7 @@ end
 
 local function Count(key, hit, evidence, kind)
     local stats = Stats(KindOf(key, kind))
-    if not stats then return end
+    if not stats or not D.Learns() then return end
     local now = time()
     local hits, misses = Counts(stats[key], now)
     local weight = EVIDENCE[evidence]
@@ -138,7 +138,7 @@ end
 -- waiting, it keeps its time (reasons of another kind are added). What a reason offers there waits too (a trainer's
 -- spells: learned, or passed at the trainer, Learning\Declined.lua). Not in combat.
 function learning.Shown(entry, kind, rank)
-    if not ns.engineDB or InCombatLockdown() then return end
+    if not ns.engineDB or not D.Learns() or InCombatLockdown() then return end
     local id = D.EntryID(entry)
     if not id then return end
     local now = time()
@@ -198,6 +198,15 @@ function learning.Declined(id, words)
 end
 
 function learning.Pending() return pending end
+
+-- Forgets the follow rates of a kind ("do": the window, "know": the search); the window's also the upgrades judged
+function learning.Forget(kind)
+    local stats = Stats(kind)
+    if stats then wipe(stats) end
+    if kind == "do" and ns.engineDB then wipe(ns.engineDB.upgradesJudged) end
+    learning.Refresh()
+    D.BumpState("rec:learning")
+end
 
 D.OnState("spells", function()
     for id, waiting in pairs(pending) do
