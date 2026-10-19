@@ -10,7 +10,18 @@ local W = ns.widgets
 local ui = ns.ui
 local bar, tip = ui.bar, ui.tip
 local WIDTH = W.WIDTH
-local Clamp, EaseOutCubic, EaseOutBack = W.Clamp, W.EaseOutCubic, ns.EaseOutBack
+local Clamp, EaseOutCubic = W.Clamp, W.EaseOutCubic
+
+-- sizes (px) and alphas
+local BACK_SIZE, FILTER_SIZE, RESET_SIZE, CLEAR_SIZE = 26, 24, 18, 16 -- the buttons
+local CLEAR_ALPHA = 0.6 -- the button that empties the text
+local SYMBOL_SMALL, SYMBOL_LARGE, SYMBOL_SHADE = 16, 18, 0.9 -- the lens; an icon or the "i"; the lens' grey
+local UNFOCUSED_TEXT_ALPHA, UNFOCUSED_LABEL_ALPHA = 0.5, 0.6 -- the dimmed text and label without the keyboard
+
+local function EaseOutBack(p) -- overshoots a little and settles
+    local c = 1.4
+    return 1 + (c + 1) * (p - 1) ^ 3 + c * (p - 1) ^ 2
+end
 
 -- the symbol at the left: what kind of view this is (see RenderBar)
 bar.symbol = bar:CreateTexture(nil, "ARTWORK")
@@ -18,7 +29,7 @@ bar.symbol:SetPoint("LEFT", 20, -1)
 
 -- Back for the mouse: the spell book's page arrow at the left of the bar, where there is a way back (no tooltip)
 bar.back = CreateFrame("Button", nil, bar)
-bar.back:SetSize(26, 26)
+bar.back:SetSize(BACK_SIZE, BACK_SIZE)
 bar.back:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up")
 bar.back:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Down")
 bar.back:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
@@ -30,7 +41,7 @@ bar.back:SetScript("OnClick", function() ns.view.Back() end)
 -- The filter button at the bar's right end (the game's dropdown button): a click opens the filter window
 -- (Filters.lua). A red × at its corner clears the filters set.
 bar.filter = CreateFrame("Button", nil, bar)
-bar.filter:SetSize(24, 24)
+bar.filter:SetSize(FILTER_SIZE, FILTER_SIZE)
 bar.filter:SetPoint("RIGHT", -16, 0)
 bar.filter.icon = bar.filter:CreateTexture(nil, "ARTWORK")
 bar.filter.icon:SetAllPoints()
@@ -53,9 +64,10 @@ if not (W.Atlas(bar.filter.hover, "common-dropdown-a-button-hover-c60")
     bar.filter.hover:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
     bar.filter.hover:SetBlendMode("ADD")
 end
--- red × at its corner while filters are set (as on the game's filter dropdowns): a click clears them; a subcategory stays
+-- red × at its corner while filters are set (as on the game's filter dropdowns): a click clears them;
+-- a subcategory stays
 bar.filter.reset = CreateFrame("Button", nil, bar.filter)
-bar.filter.reset:SetSize(18, 18)
+bar.filter.reset:SetSize(RESET_SIZE, RESET_SIZE)
 bar.filter.reset:SetPoint("CENTER", bar.filter, "TOPRIGHT", -1, -1)
 bar.filter.reset:SetFrameLevel(bar.filter:GetFrameLevel() + 2)
 bar.filter.reset.icon = bar.filter.reset:CreateTexture(nil, "ARTWORK")
@@ -63,7 +75,7 @@ bar.filter.reset.icon:SetAllPoints()
 if not W.Atlas(bar.filter.reset.icon, "auctionhouse-ui-filter-redx") then
     bar.filter.reset.icon:SetTexture("Interface\\Buttons\\UI-StopButton")
 end
--- hovering lights the × itself up (a square glow drew a blue frame)
+-- hovering lights the × itself up (a square glow would draw a blue frame)
 local RESET_GLOW = 0.5
 bar.filter.reset.glow = bar.filter.reset:CreateTexture(nil, "HIGHLIGHT")
 bar.filter.reset.glow:SetAllPoints()
@@ -85,9 +97,9 @@ bar.filter:SetScript("OnLeave", function() tip:Hide() end)
 -- The × that empties the text, as the game's search boxes have it: category and filters stay, the keyboard
 -- goes to the bar. Shown while there is text (RenderBar).
 bar.clear = CreateFrame("Button", nil, bar)
-bar.clear:SetSize(16, 16)
+bar.clear:SetSize(CLEAR_SIZE, CLEAR_SIZE)
 bar.clear:SetNormalTexture("Interface\\FriendsFrame\\ClearBroadcastIcon")
-bar.clear:GetNormalTexture():SetAlpha(0.6)
+bar.clear:GetNormalTexture():SetAlpha(CLEAR_ALPHA)
 bar.clear:SetHighlightTexture("Interface\\FriendsFrame\\ClearBroadcastIcon", "ADD")
 bar.clear:RegisterForClicks("LeftButtonUp")
 bar.clear:Hide()
@@ -108,7 +120,7 @@ bar.text = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
 bar.text:SetJustifyH("LEFT")
 
 bar.hint = bar:CreateFontString(nil, "OVERLAY", "GameFontDisableLarge")
--- a little right of where the text starts: the cursor stands there (else it cut into the first letter)
+-- a little right of where the text starts: the cursor stands there (else it would cut into the first letter)
 bar.hint:SetPoint("LEFT", bar.text, "LEFT", 6, 0)
 bar.hint:SetTextColor(W.PLACEHOLDER[1], W.PLACEHOLDER[2], W.PLACEHOLDER[3])
 
@@ -142,7 +154,8 @@ local function WantCursor()
     end
 end
 
--- Filter tokens: small framed labels between the label and the text, one per set filter, in the filter's colour; a click removes one.
+-- Filter tokens: small framed labels between the label and the text, one per set filter, in the filter's
+-- color; a click removes one.
 local TOKEN_HEIGHT, TOKEN_PAD = 22, 16
 local TOKEN_GROUND = { 0.12, 0.09, 0.05, 0.85 }
 local tokens = {}
@@ -186,7 +199,7 @@ end
 
 -- Draws the bar for the state: the symbol (lens for every search, also in a category; "i" for a detail view,
 -- the link's icon for a link's list), label, text, hint, tabs. The detail view is no search: its entry's name
--- (an item in its quality colour and with its English name), no text, no cursor.
+-- (an item in its quality color and with its English name), no text, no cursor.
 local ENGLISH = "|cff9d9d9d" -- an English name in brackets: the game's grey
 function ui.RenderBar()
     local symbol, isIcon = "Interface\\Common\\UI-Searchbox-Icon", false
@@ -210,12 +223,12 @@ function ui.RenderBar()
         label = S.linked.link.title:format("|cffffffff" .. S.linked.entry.name .. "|r")
     end
     -- searching in a category: no label; the lit tabs are the path and the hint names where the search
-    -- looks ("Search in Arms"); a path in the bar doubled the tabs
+    -- looks ("Search in Arms"); a path in the bar would double the tabs
     bar.symbol:SetTexture(symbol)
     bar.symbol:SetTexCoord(isIcon and 0.08 or 0, isIcon and 0.92 or 1, isIcon and 0.08 or 0, isIcon and 0.92 or 1)
-    local size = (isIcon or S.detail) and 18 or 16
+    local size = (isIcon or S.detail) and SYMBOL_LARGE or SYMBOL_SMALL
     bar.symbol:SetSize(size, size)
-    local shade = (isIcon or S.detail) and 1 or 0.9
+    local shade = (isIcon or S.detail) and 1 or SYMBOL_SHADE
     bar.symbol:SetVertexColor(shade, shade, shade)
 
     bar.label:SetText(label)
@@ -243,8 +256,8 @@ function ui.RenderBar()
     if S.unfocused then
         bar.hint:SetText(L["Click here to type"])
         bar.hint:SetShown(S.query == "")
-        bar.text:SetAlpha(0.5)
-        bar.label:SetAlpha(0.6)
+        bar.text:SetAlpha(UNFOCUSED_TEXT_ALPHA)
+        bar.label:SetAlpha(UNFOCUSED_LABEL_ALPHA)
     else
         bar.hint:SetShown(empty)
         bar.text:SetAlpha(1)
@@ -340,8 +353,7 @@ local closing = { duration = W.CLOSE_TIME,
 function ui.StartOpening()
     S.barTop = -UIParent:GetHeight() * BAR_TOP
     S.openedAt, S.closingAt, bar.settled, bar.halfOpen = GetTime(), nil, false, false
-    -- the windows below start hidden, so the list folds open again after the bar (hiding the bar left them
-    -- shown inside it, so only the first opening did)
+    -- the windows below start hidden, so the list folds open after the bar on every opening
     ui.list:Hide()
     ui.list.pending = nil
     ui.detail:Hide()

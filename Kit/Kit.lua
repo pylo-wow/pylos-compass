@@ -1,9 +1,7 @@
--- Pylos Kit 1.0.0 (copied from pylos-dev\shared; do not edit here)
 local addonName, ns = ...
 
--- Settings, saved data, minimap button and slash command of one Pylos addon, built from
--- its ns.options at its ADDON_LOADED. Every addon carries its own copy: no global, nothing
--- shared with other addons at run time.
+-- Settings, saved data, minimap button and slash command of one Pylos addon, built from its ns.options at its
+-- ADDON_LOADED. Every addon carries its own copy: no global, nothing shared between addons at run time.
 --
 -- ns.options = {
 --     savedVariable = "MyAddonDB",          -- name from the TOC
@@ -51,7 +49,7 @@ local addonName, ns = ...
 -- (toggleText is used in the chat line and tooltip); all other options except
 -- minimap are grayed out while it is off.
 --
--- Set on ns: L (texts), kit = { version, Saved, NewLocale }; once the options are built
+-- Set on ns: L (texts), kit = { version, Saved }; once the options are built
 -- db, minimapButton (.icon), SetOption(key, value), GetColor(key), IsModifierHeld(key),
 -- SetAlert(on). A field the addon set itself is kept (db excepted). ns.off set by the
 -- addon before its ADDON_LOADED: nothing is built.
@@ -59,7 +57,7 @@ local addonName, ns = ...
 -- Page layout: intro; general switches without header (master first, minimap
 -- last); "Display"; further sections. A section needs at least three entries.
 --
--- Saved keys no option names any more are kept; only a schema migration removes them.
+-- Saved keys that no option names are kept; only a schema migration removes them.
 --
 -- Every page is a canvas page with its own controls, not a page of Blizzard's settings
 -- list: that list is shared by all pages, and Blizzard's Audio page calls a restricted
@@ -76,10 +74,7 @@ end
 
 -- Texts: English, each its own key
 
-local function NewLocale()
-    return setmetatable({}, { __index = function(_, key) return key end })
-end
-Offer("L", NewLocale())
+Offer("L", setmetatable({}, { __index = function(_, key) return key end }))
 local L = ns.L
 
 -- Saved data
@@ -119,7 +114,7 @@ local function Saved(name, spec)
     return db
 end
 
-Offer("kit", { version = VERSION, Saved = Saved, NewLocale = NewLocale })
+Offer("kit", { version = VERSION, Saved = Saved })
 
 local function Problem(text)
     local options = ns.options
@@ -173,12 +168,32 @@ local PRESETS = {
         return values
     end,
     modifier = function()
-        return { { "none", L["Always"] }, { "shift", L["Only with Shift"] }, { "ctrl", L["Only with Ctrl"] }, { "alt", L["Only with Alt"] } }
+        return { { "none", L["Always"] }, { "shift", L["Only with Shift"] }, { "ctrl", L["Only with Ctrl"] },
+            { "alt", L["Only with Alt"] } }
     end,
 }
 
 local TYPES = { checkbox = true, minimap = true, header = true, text = true, button = true, page = true,
     keybinding = true, slider = true, dropdown = true, color = true, modifier = true }
+
+-- what an entry of a known type lacks to be built (a text for the problem line), nil if it is complete
+local function Missing(entry)
+    local kind = entry.type
+    if (kind == "checkbox" or kind == "dropdown" or kind == "color" or kind == "modifier")
+            and type(entry.key) ~= "string" then
+        return "a key"
+    elseif kind == "dropdown" and type(entry.values) ~= "table" then
+        return "values"
+    elseif kind == "button" and type(entry.func) ~= "function" then
+        return "a func"
+    elseif kind == "keybinding" and type(entry.command) ~= "string" then
+        return "a command"
+    elseif kind == "page" and type(entry.init) ~= "function" then
+        return "an init function"
+    elseif entry.onChange and type(entry.key) ~= "string" and kind ~= "minimap" then
+        return "a key for its onChange"
+    end
+end
 
 local LABEL_X = 37
 local ROW_HEIGHT = 32
@@ -238,15 +253,14 @@ local function AddPageRow(page, height, label)
     return row
 end
 
--- color: optional color key; height in pixels
-local function AddTextRow(page, height, text, color)
+-- height in pixels
+local function AddTextRow(page, height, text)
     local row = AddPageRow(page, height)
     local fontString = row.frame:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     fontString:SetPoint("TOPLEFT", LABEL_X, -4)
     fontString:SetPoint("TOPRIGHT", -20, -4) -- full row width, wraps only when needed
     fontString:SetJustifyH("LEFT")
-    local rgb = color and GetColor(color) or { 1, 1, 1 }
-    fontString:SetTextColor(rgb[1], rgb[2], rgb[3])
+    fontString:SetTextColor(1, 1, 1)
     fontString:SetText(text)
     row.text = fontString
     return row
@@ -271,7 +285,7 @@ end
 local function KeyBindingButton(row, command)
     local button = CreateFrame("Button", nil, row.frame, "UIPanelButtonTemplate")
     local function Show()
-        -- the label is no longer "Press a key": a capture left on would bind the next Enter or W unseen
+        -- capture ends here: one left on would bind the next Enter or W unseen
         button:EnableKeyboard(false)
         local key = GetBindingKey(command)
         button:SetText(key and GetBindingText(key) or L["Not bound"])
@@ -303,7 +317,8 @@ local function KeyBindingButton(row, command)
             local chord = CreateKeyChordStringUsingMetaKeyState(key)
             local taken = GetBindingAction(chord)
             if taken and taken ~= "" and taken ~= command then
-                Problem(L["%s was bound to %s; that binding is replaced"]:format(GetBindingText(chord), GetBindingName and GetBindingName(taken) or taken))
+                Problem(L["%s was bound to %s; that binding is replaced"]:format(GetBindingText(chord),
+                    GetBindingName and GetBindingName(taken) or taken))
             end
             SetBinding(chord, command)
             SaveBindings(GetCurrentBindingSet())
@@ -328,7 +343,8 @@ local function Build()
     local changeHandlers = {} -- key -> list of handlers, called with the new value
 
     local function OpenOptions()
-        -- Settings.OpenToCategory is flagged HasRestrictions (SettingsUtilDocumentation.lua)
+        -- Settings.OpenToCategory calls C_SettingsUtil.OpenSettingsPanel, which is flagged HasRestrictions
+        -- (SettingsUtilDocumentation.lua)
         if InCombatLockdown() then
             Problem(L["the options cannot be opened in combat."])
             return
@@ -340,7 +356,8 @@ local function Build()
     local function SetOption(key, value)
         db[key] = value
         for _, handler in ipairs(changeHandlers[key] or {}) do handler(value) end
-        -- closed: the next OnRefresh lays out anyway (a parentless panel counts as visible, so the first call still runs)
+        -- closed: the next OnRefresh lays out anyway (a parentless panel counts as visible, so the first call
+        -- still runs)
         if page and page.panel:IsVisible() then page.Layout() end
     end
 
@@ -497,15 +514,13 @@ local function Build()
         Settings.RegisterCanvasLayoutSubcategory(category, panel, entry.label)
     end
 
-    -- grayed out: by enabledIf, by the option it depends on, or (after the master switch) by
-    -- the master switch; the master switch and minimap only by enabledIf
+    -- grayed out: by enabledIf, by the option it depends on, or by the master switch (only the entries
+    -- after it; the master switch and minimap only by enabledIf)
     local function EnabledTest(entry, afterMaster)
         return function()
             if entry.enabledIf and not entry.enabledIf() then return false end
-            if entry.dependsOn then
-                return (not master or db[master.key]) and db[entry.dependsOn] == entry.enabledWhen
-            end
-            return not afterMaster or db[master.key]
+            if afterMaster and not db[master.key] then return false end
+            return not entry.dependsOn or db[entry.dependsOn] == entry.enabledWhen
         end
     end
 
@@ -526,7 +541,7 @@ local function Build()
             local key = entry.key or "minimap"
             row = AddPageRow(page, ROW_HEIGHT, kind == "minimap" and L["Show minimap button"] or entry.label)
             local box = CreateFrame("CheckButton", nil, row.frame, "SettingsCheckboxTemplate")
-            -- the template's own OnEnter/OnLeave show Blizzard's (empty) SettingsTooltip; keep only its hover background
+            -- the template's OnEnter/OnLeave show Blizzard's (empty) SettingsTooltip; keep only its hover background
             box:SetScript("OnEnter", function(self) if self.HoverBackground then self.HoverBackground:Show() end end)
             box:SetScript("OnLeave", function(self) if self.HoverBackground then self.HoverBackground:Hide() end end)
             box:SetPoint("LEFT", row.frame, "CENTER", -80, 0)
@@ -589,7 +604,7 @@ local function Build()
         for _, entry in ipairs(entries) do
             local row = AddEntry(entry)
             if row then
-                row.key = entry.key or (entry.type == "minimap" and "minimap" or nil)
+                row.key = entry.key or (entry.type == "minimap" and "minimap" or nil) -- read by the tests
                 if entry.visibleWhen then
                     local key, value = entry.visibleWhen[1], entry.visibleWhen[2]
                     row.visible = function() return db[key] == value end
@@ -638,9 +653,14 @@ local function Build()
         return
     end
     for _, entry in ipairs(options) do
+        local missing = TYPES[entry.type] and Missing(entry)
         if entry.type == "slider" and not (type(entry.key) == "string" and type(entry.default) == "number"
                 and type(entry.min) == "number" and type(entry.max) == "number" and entry.max > entry.min) then
-            Problem(L["the slider \"%s\" needs a key, a default, min and max (max above min), its row is left out."]:format(tostring(entry.label or entry.key)))
+            Problem(L["the slider \"%s\" needs a key, a default, min and max (max above min), its row is left out."]
+                :format(tostring(entry.label or entry.key)))
+        elseif missing then
+            Problem(L["the %s \"%s\" needs %s, its row is left out."]:format(entry.type,
+                tostring(entry.label or entry.key or entry.command or entry.text), missing))
         elseif TYPES[entry.type] then
             entries[#entries + 1] = entry
         else
@@ -657,8 +677,8 @@ local function Build()
 
     local schema = options.schema or {}
     db = Saved(options.savedVariable, { defaults = defaults, version = schema.version, migrations = schema.migrations })
-    ns.db = db -- even when set: some addons hold false here until now
-    Offer("SetOption", SetOption) -- only now: it needs db
+    ns.db = db -- replaces any value the addon set
+    Offer("SetOption", SetOption) -- after db: it needs db
 
     CreateMinimapButton()
     BuildMenu()
@@ -675,7 +695,8 @@ local function Build()
                     OpenOptions()
                 else
                     print(CHAT_NAME:format(title) .. ":")
-                    print(("  %s - %s"):format(options.slash, options.leftClickText or L["same as left-clicking the minimap button"]))
+                    print(("  %s - %s"):format(options.slash,
+                        options.leftClickText or L["same as left-clicking the minimap button"]))
                     print("  " .. L["%s options - open the options"]:format(options.slash))
                 end
             end

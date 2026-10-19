@@ -6,7 +6,8 @@ local L = ns.L
 -- is worth (D.QuestOf, the client's quest cache):
 --   experience  its XP as a share of your level: XP_PER_LEVEL a whole level
 --   reward      the best upgrade for you among its rewards and choices: REWARD of its strength as an upgrade
---               (ns.UpgradeOf: class and armour checked, strength flattening); half, as the quest brings more than the item
+--               (ns.UpgradeOf: class and armor checked, strength flattening); half, as the quest brings more than
+--               the item
 --   chain       the quests it opens (D.QuestOf.nextQuest; the cache gives the next one, not what comes before): CHAIN
 --               for each one not above your level + 3, up to CHAIN_MAX
 --   turn in     done, only the way back left: x READY
@@ -19,24 +20,23 @@ local BASE, XP_PER_LEVEL, REWARD = 1, 2, 0.5
 local CHAIN, CHAIN_MAX, CHAIN_ABOVE = 0.15, 5, 3
 local READY = 1.3
 
-local inLog = {} -- quest ID -> true; per search
+local inLog = {} -- quest ID -> true; see prepare
 local ready = {} -- quest ID -> true: complete
 
 -- the quests it opens one after another, not too high for you
 local function Chain(quest)
     local count, level = 0, UnitLevel("player")
-    local next = quest.nextQuest
-    while next and count < CHAIN_MAX do
-        local q = D.QuestOf(next)
-        if not q or q.level > level + CHAIN_ABOVE then break end
+    local following = quest.nextQuest
+    while following and count < CHAIN_MAX do
+        local q = D.QuestOf(following)
+        if not q or (q.level or 0) > level + CHAIN_ABOVE then break end
         count = count + 1
-        next = q.nextQuest
+        following = q.nextQuest
     end
     return count
 end
 
--- the best of its rewards as an upgrade for you: its strength (0: none),
--- the comparison, the item
+-- the best of its rewards as an upgrade for you: its strength (0: none), the comparison, the item
 local function Reward(quest)
     local best, compared, item = 0, nil, nil
     for _, list in ipairs({ quest.rewards, quest.choices }) do
@@ -49,7 +49,8 @@ local function Reward(quest)
     return best, compared, item
 end
 
--- what the game gives of a quest's XP 6, 7, 8, 9 levels above it, 10 % from 10 on (vmangos Quest::XPValue; the data's xp is in full)
+-- what the game gives of a quest's XP 6, 7, 8, 9 levels above it, 10 % from 10 on (vmangos Quest::XPValue; the data's
+-- xp is in full)
 local LESS = { 0.8, 0.6, 0.4, 0.2 }
 local LEAST = 0.1
 
@@ -64,7 +65,7 @@ end
 -- How much of a quest of your log is still to do: 0 (done) to 1 (nothing done), from its objectives' counts
 -- (QuestObjectiveInfo numFulfilled, numRequired); nil while the game has not told (Reach.lua asks it too)
 function ns.QuestRest(questID)
-    if questID <= 0 or not (C_QuestLog and C_QuestLog.GetQuestObjectives) then return nil end
+    if questID <= 0 then return nil end
     if C_QuestLog.IsComplete(questID) then return 0 end
     local objectives = C_QuestLog.GetQuestObjectives(questID)
     if not objectives or #objectives == 0 then return nil end
@@ -90,7 +91,7 @@ ns.RegisterReason({
         wipe(ready)
         D.EachLoggedQuest(function(questID)
             inLog[questID] = true
-            if questID > 0 and C_QuestLog.IsComplete(questID) then ready[questID] = true end
+            if C_QuestLog.IsComplete(questID) then ready[questID] = true end
         end)
     end,
     test = function(entry)
@@ -143,7 +144,7 @@ ns.RegisterReason({
             parts[#parts + 1] = L["%s makes you %.1f %% stronger"]:format(D.NameEN("item", item) or "?", r.share)
         end
         local chain = Chain(quest)
-        if chain > 0 then parts[#parts + 1] = L["opens %d more quests"]:format(chain) end
+        if chain > 0 then parts[#parts + 1] = L["opens %d more"]:format(chain) end
         if ready[entry.questID] then table.insert(parts, 1, L["ready to turn in"]) end
         return #parts > 0 and table.concat(parts, ", ") or L["In your quest log"]
     end,

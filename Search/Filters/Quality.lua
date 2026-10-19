@@ -1,8 +1,8 @@
 local ns = select(2, ...).search
 local L = ns.L
 
--- Quality: one filter per quality, named and coloured as in the game ("Epic" in purple), found by its
--- colour too ("purple"). One group: two qualities set show both.
+-- Quality: one filter per quality, named and colored as in the game ("Epic" in purple), found by its
+-- color too ("purple"). One group: two qualities set show both.
 
 local WORDS = {
     [0] = "grey gray poor junk",
@@ -19,7 +19,7 @@ for quality = 0, 5 do
         key = "quality" .. quality,
         name = _G["ITEM_QUALITY" .. quality .. "_DESC"],
         words = "quality " .. WORDS[quality],
-        icon = "Interface\\Icons\\INV_Misc_Gem_Diamond_01", -- white, tinted in the quality's colour
+        icon = "Interface\\Icons\\INV_Misc_Gem_Diamond_01", -- white, tinted in the quality's color
         iconColor = ok and { r, g, b } or nil,
         color = ok and hex or nil,
         group = "quality", groupName = L["Quality"], -- one section of the filter window

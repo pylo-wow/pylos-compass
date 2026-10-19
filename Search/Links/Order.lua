@@ -27,7 +27,7 @@ local ORDERS = {
 -- the kind of an entry, as the orders above name them
 local function Kind(entry)
     if entry.itemID then
-        local gathering = D.Gathering and D.Gathering(entry.itemID)
+        local gathering = D.Gathering(entry.itemID)
         if gathering and (gathering.kind == "mine" or gathering.kind == "herb") then return "gathered" end
         if gathering then return "material" end -- skinned or dropped
         local class = entry.itemClass

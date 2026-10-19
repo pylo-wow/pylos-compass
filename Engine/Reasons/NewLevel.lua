@@ -16,14 +16,14 @@ local function Look()
     if known and level > known then before, cameAt = known, time() end
     known = level
 end
--- your level changed (state; UnitLevel may still be the old level while PLAYER_LEVEL_UP is told: the poll tells again,
--- and every search looks too)
+-- your level changed (state; UnitLevel may still be the old level while PLAYER_LEVEL_UP is told: the poll tells
+-- again, and every prepare looks too)
 D.OnState("level", Look)
 
 local function Fresh() return cameAt ~= nil and time() - cameAt < FRESH end
 
 local classID = 0
-local new = {} -- names of the spells the new level brought (per search), sorted
+local new = {} -- names of the spells the new level brought, sorted; see prepare
 local function NewSpells()
     wipe(new)
     for _, entry in ipairs(D.Entries("spells")) do
@@ -43,7 +43,7 @@ ns.RegisterReason({
     stage = "know", weight = 1.1, label = "New level",
     kind = "know",
     sources = { "npcs" },
-    depends = { "level", "spells", "npcs", "data" }, -- (fading with time: kept at most STALE seconds, Reasons.lua)
+    depends = { "level", "spells", "npcs", "data" }, -- fades with time: kept at most STALE seconds (Reasons.lua)
     prepare = function()
         Look()
         classID = select(3, UnitClass("player")) or 0
@@ -59,7 +59,8 @@ ns.RegisterReason({
     end,
     note = function() return #new == 1 and L["New level: 1 spell"] or L["New level: %d spells"]:format(#new) end,
     why = function()
-        return (#new == 1 and L["New level: a new spell to learn"] or L["New level: %d new spells to learn"]:format(#new)) .. ": "
+        return (#new == 1 and L["New level: a new spell to learn"]
+                or L["New level: %d new spells to learn"]:format(#new)) .. ": "
             .. table.concat(new, ", ", 1, math.min(#new, NAMES)) .. (#new > NAMES and ", ..." or "")
     end,
 })

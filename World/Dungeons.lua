@@ -1,8 +1,8 @@
 local _, D = ...
 
--- Dungeons and raids from Data\Dungeons_*.lua (client tables): level range, players, entrance
--- zone (unknown for instances new in Forever), bosses in order. Also group levels, level fit
--- and entrances learned in play.
+-- Dungeons and raids from Data\Dungeons_enUS.lua (format in its header): level range, players,
+-- entrance zone (unknown for instances new in Forever), bosses in order. Also group levels,
+-- level fit and entrances learned in play.
 
 local KEY = "dungeons"
 
@@ -148,7 +148,6 @@ D.On("PLAYER_ENTERING_WORLD", function()
         local summoned = summonedAt and GetTime() - summonedAt < SUMMON_WINDOW
         local finder = IsInLFGDungeon and IsInLFGDungeon()
         if before and not D.Secret(mapID) and mapID and not summoned and not finder then
-            D.world.dungeons = D.world.dungeons or {}
             if D.world.dungeons[mapID] ~= before then
                 D.world.dungeons[mapID] = before
                 if D.Built(KEY) then D.Rebuild(KEY) end

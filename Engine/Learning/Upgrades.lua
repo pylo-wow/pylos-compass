@@ -4,16 +4,17 @@ local ns = D.engine
 -- Learns whether the item valuer's upgrades are right for you, not from following within half an hour (most upgrades
 -- cannot be put on that soon) but from what you do with upgrades you get or are offered. Each counts for the reason
 -- "upgrade" (Learning.lua: EVIDENCE):
---   chose    a quest reward: the best upgrade among the choices taken is a hit; one taken that is no upgrade at all while
---            an upgrade was on offer, a miss (a smaller upgrade taken over the best says the weights are off, not the
---            reason: not counted). A loot roll on an upgrade: need a hit, pass or greed a miss. An upgrade in your bags
---            sold or destroyed without having worn it: a miss
+--   chose    a quest reward: the best upgrade among the choices taken is a hit; one taken that is no upgrade at all
+--            while an upgrade was on offer, a miss (a smaller upgrade taken over the best says the weights are off, not
+--            the reason: not counted). A loot roll on an upgrade: need a hit, pass or greed a miss. An upgrade in your
+--            bags sold or destroyed without having worn it: a miss
 --   did      an upgrade from your bags put on
 -- Keeping one unworn counts nothing: it may wait for a level or a second look (and the player can skew waiting time).
 -- Gone to the bank, a letter, a trade or the auction house: no decision seen.
 -- Unlike other reasons these need not have been shown as a suggestion (Learning.lua counts only what was shown): each
 -- is an active choice of yours about an upgrade, wherever it came from.
--- Each item is judged once per character (saved in upgradesJudged, so a login does not count it again; JUDGED_DAYS long).
+-- Each item is judged once per character (saved in upgradesJudged, so a login does not count it again; JUDGED_DAYS
+-- long).
 -- An upgrade you cannot put on yet (level) waits until you can.
 -- Blizzard source (forever): QuestFrame.lua calls GetQuestReward(choice); QuestInfo.lua reads the choices with
 -- GetQuestItemInfo("choice", i) (6th value the item ID); GroupLootFrame.lua rolls with RollOnLoot(rollID, 0 pass,
@@ -47,7 +48,7 @@ local function Recently(window)
     return state == true or (state and GetTime() - state <= AWAY)
 end
 
--- an item that is no armour or weapon is never an upgrade: told once per item (900 looks took 4 ms in the search's bench)
+-- an item that is no armor or weapon is never an upgrade: told once per item
 local notGear = {} -- item ID -> true or false
 local function NotGear(itemID)
     local known = notGear[itemID]
@@ -73,12 +74,13 @@ local function Look()
             else
                 Observe(itemID, false, "chose", Recently("merchant") and "sold" or "destroyed")
             end
-        elseif not ns.UpgradeOf(itemID) then
+        elseif not ns.UpgradeOf(D.bagLinks[itemID] or itemID) then
             watched[itemID] = nil -- something better came, or it is no upgrade any more
         end
     end
     for itemID in pairs(D.bagItems) do
-        if not watched[itemID] and not judged[itemID] and not NotGear(itemID) and ns.UpgradeOf(itemID) then
+        if not watched[itemID] and not judged[itemID] and not NotGear(itemID)
+            and ns.UpgradeOf(D.bagLinks[itemID] or itemID) then
             watched[itemID] = true
         end
     end
@@ -101,7 +103,9 @@ local function Rewarded(choice)
 end
 
 local function Rolled(rollID, rollType)
-    local itemID = D.ItemIDFromLink(GetLootRollItemLink and GetLootRollItemLink(rollID))
+    local data = C_TooltipInfo.GetLootRollItem(rollID) -- (GroupLootFrame.lua shows the roll's item with it)
+    local itemID = data and data.id
+    if D.Secret(itemID) then return end
     local judged = Judged()
     if not itemID or not judged or judged[itemID] or not ns.UpgradeOf(itemID) then return end
     Observe(itemID, rollType == 1, "chose", rollType == 1 and "need" or "roll passed")
@@ -134,7 +138,7 @@ D.OnState({ "bags", "gear", "level" }, Look)
 if GetQuestReward then hooksecurefunc("GetQuestReward", function(choice) pcall(Rewarded, choice) end) end
 if RollOnLoot then hooksecurefunc("RollOnLoot", function(rollID, rollType) pcall(Rolled, rollID, rollType) end) end
 
--- the judged items older than JUDGED_DAYS go (at login: Learning.lua)
+-- the judged items older than JUDGED_DAYS go (at load: Core.lua)
 function ns.learning.PruneJudged()
     local db = ns.db
     if not db then return end

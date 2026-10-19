@@ -3,8 +3,8 @@ local ns = select(2, ...).search
 -- Keys while the bar is open. The bar is no EditBox: a focused EditBox swallows Enter, and spells
 -- can only be cast by a key binding or a click on a secure button. So a frame passing every key on
 -- reads typed characters (OnChar), and override bindings take the keys: control keys click a plain
--- button, Enter and Ctrl+Enter click secure buttons, typing keys are bound to nothing (no walking,
--- quiet action bars). Override bindings are not allowed in combat, so the bar only opens out of
+-- button, Enter and Ctrl+Enter click secure buttons, typing keys click the plain button too and are ignored
+-- (no walking, quiet action bars). Override bindings are not allowed in combat, so the bar only opens out of
 -- combat. The search key stays bound and closes the bar. What the keys do: View.lua.
 
 local S = ns.state
@@ -12,7 +12,8 @@ local input = {}
 ns.input = input
 
 -- Secure buttons
--- Enter only casts or uses when the detail view's action is chosen, Ctrl+Enter always; both act on release.
+-- Enter acts only while a menu line with a secure action (spell or macro) is marked (Menu.lua), Ctrl+Enter
+-- acts on the marked or open entry; both act on release.
 
 local function SecureKey(name)
     local button = CreateFrame("Button", name, UIParent, "SecureActionButtonTemplate")
@@ -32,20 +33,20 @@ quick:SetScript("PostClick", function(_, _, down)
     if not down then ns.view.AfterAction() end
 end)
 
--- writes an entry's action into a secure button (out of combat only): type
--- "spell" with the spell ID, type "item" with "item:ID", or nothing
-function input.ArmAction(button, entry)
+-- writes an entry's action into a secure button (out of combat only): its type ("spell", "item", "macro")
+-- with its value, or nothing
+local function ArmAction(button, entry)
     local kind = entry and entry.type
     button:SetAttribute("type", kind)
     if kind then button:SetAttribute(kind == "macro" and "macrotext" or kind, entry.value) end
 end
 
 function input.ArmEnter(entry)
-    input.ArmAction(enter, entry)
+    ArmAction(enter, entry)
 end
 
 function input.ArmQuick(entry)
-    input.ArmAction(quick, ns.view.HasAction(entry) and entry or nil)
+    ArmAction(quick, ns.view.HasAction(entry) and entry or nil)
 end
 
 -- Key names as the client reports them ("." and NUMPADPLUS seen in game); a key not listed still
@@ -125,8 +126,7 @@ keys:SetScript("OnClick", function(_, key, down)
     end
 end)
 
--- repeats the held key: shown only while a key is held (on the key button it ran every frame);
--- a hidden bar counts as let go
+-- repeats the held key: shown only while a key is held; a hidden bar counts as let go
 repeater = CreateFrame("Frame", nil, ns.ui.bar)
 repeater:Hide()
 repeater:SetScript("OnHide", function() held = nil end)
@@ -167,8 +167,8 @@ local function Bind(key, button, mouseButton)
     end
 end
 
--- Keys held when the bar opens (walking, turning) stay the game's until let go: bound at once,
--- their release went to the search and the character walked on. Then the search takes them.
+-- Keys held when the bar opens (walking, turning) stay the game's until let go: bound at once, their release
+-- would go to the search and the character would walk on. Then the search takes them.
 local waiting = {} -- key -> mouse button name for PylosCompassKeys
 -- watches held keys; shown only while one waits
 local free = CreateFrame("Frame", nil, ns.ui.bar)
@@ -191,8 +191,11 @@ free:SetScript("OnUpdate", function(self)
     if next(waiting) == nil then self:Hide() end
 end)
 
+-- the key names of ä ö ü are capitals (SWALLOW); string.upper leaves UTF-8 letters alone. ß names itself.
+local UMLAUTS = { ["ä"] = "Ä", ["ö"] = "Ö", ["ü"] = "Ü" }
+
 function input.Waiting(text)
-    return waiting[text == " " and "SPACE" or text:upper()] ~= nil
+    return waiting[text == " " and "SPACE" or UMLAUTS[text] or text:upper()] ~= nil
 end
 
 function input.BindKeys()

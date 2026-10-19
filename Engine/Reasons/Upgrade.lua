@@ -2,16 +2,16 @@ local _, D = ...
 local ns = D.engine
 local L = ns.L
 
--- Upgrade: armour or a weapon you can use (D.ItemForYou) worth more to you than what you wear in its place, as the item
+-- Upgrade: armor or a weapon you can use (D.ItemForYou) worth more to you than what you wear in its place, as the item
 -- valuer sees it (ItemValue\Value.lua). The strength is how much stronger you get: the gain in percent of all you wear
 -- (share), growing but flattening: log2(1 + share / 2.5) / 2, so 4 % is 0.7, 20 % 1.6, from 37.5 % on 2, the most a
--- strength counts (Reasons.lua: MOST; a lower cap made most upgrades alike); a free slot counts FREE_SHARE of its share.
--- Below MIN_SHARE no upgrade (small change filled the lists). So a two-hander 10 % better comes before a ring 50 %
--- better. What you wear is none, one in your bags is Equip.lua's. How easy it is to get is its reach (reach.Item); one
--- only luck brings (a world drop) is none.
+-- strength counts (Reasons.lua: MOST); a free slot counts FREE_SHARE of its share. Below MIN_SHARE no upgrade (small
+-- change filled the lists). So a two-hander 10 % better comes before a ring 50 % better. What you wear is none, one in
+-- your bags is Equip.lua's. How easy it is to get is its reach (reach.Item); one only luck brings (a world drop) is
+-- none.
 -- The row: "+14 %  ·  Strength, Crit" (against what you wear there) or "Free slot  ·  ...".
--- ns.UpgradeOf is the one check of "an upgrade for you": this reason, the item tooltips (ItemValue\Tooltip.lua), a
--- quest's rewards (QuestLog.lua) and the learning (Learning\Upgrades.lua) ask it, with the same threshold.
+-- ns.UpgradeOf is the one check of "an upgrade for you": this reason, Equip.lua, a quest's rewards (QuestLog.lua), the
+-- learning (Learning\Upgrades.lua), the nudges and the search's rows ask it, with the same threshold.
 
 local MIN_SHARE, FREE_SHARE = 0.5, 0.25
 local TOP = 2 -- stats named on the row
@@ -19,13 +19,12 @@ local TOP = 2 -- stats named on the row
 local function IsGear(entry) return entry.itemClass == 2 or entry.itemClass == 4 end
 
 -- an item you can use that is an upgrade for you (an item ID, or a link: only a link knows the stats of an item with
--- random ones, "of the Monkey"): the valuer's comparison (ItemValue.Compare: share, percent, top, ...), nil if not; worn
--- or not does not matter here. anyone: also for an item you cannot use (only the item tooltips ask so, never the
--- suggestions)
-function ns.UpgradeOf(item, anyone)
+-- random ones, "of the Monkey"): the valuer's comparison (ItemValue.Compare: share, percent, top, ...), nil if not;
+-- worn or not does not matter here
+function ns.UpgradeOf(item)
     local itemID = type(item) == "string" and D.ItemIDFromLink(item) or item
     local entry = itemID and D.ItemByID(itemID)
-    if not entry or not IsGear(entry) or not (anyone or D.ItemForYou(entry)) then return nil end
+    if not entry or not IsGear(entry) or not D.ItemForYou(entry) then return nil end
     local r = ns.ItemValue.Compare(item)
     if not r or r.gain <= 0 or r.share < MIN_SHARE then return nil end
     return r
@@ -48,7 +47,8 @@ end
 ns.RegisterReason({
     key = "upgrade",
     -- weight 1: a clear upgrade is plain progress; its size is the strength
-    stage = "progress", label = "Upgrade", learn = false, -- Learning\Upgrades.lua watches what you do with them
+    stage = "progress", label = "Upgrade",
+    learn = false, -- Learning\Upgrades.lua watches what you do with them
     sources = { "items" },
     -- worth the same wherever you stand (whether a way to it is known changes with the zone at most): the valuer's
     -- states, your bags, and the ways (quests, vendors, money, prices, zone, travel)

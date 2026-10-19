@@ -2,7 +2,7 @@ local _, D = ...
 local ns = D.engine
 local L = ns.L
 
--- Quest need: what an open objective of your quest log asks for.
+-- Quest need (knowing): what an open objective of your quest log asks for.
 --   items  an item to collect ("Linen Cloth: 3/10")
 --   npcs   one to defeat ("Kobold Vermin slain: 3/10"), or one that drops an item to collect (Data\NPCLinks.lua)
 -- Objective texts are read with the client's own formats (QUEST_ITEMS_NEEDED, QUEST_MONSTERS_KILLED; they differ by
@@ -26,26 +26,16 @@ local readAt -- the state "quests" it was read at
 
 local EachQuest = D.EachLoggedQuest
 
--- a quest's open objectives: list of { kind, text }, or nil while the game
--- has not loaded them yet (a text starting with a space, or none)
-local function Objectives(questID, index)
+-- a quest's open objectives: list of { kind, text }, or nil while the game has not loaded them yet (a text starting
+-- with a space, or none)
+local function Objectives(questID)
+    local objectives = C_QuestLog.GetQuestObjectives(questID)
+    if not objectives then return nil end
     local list = {}
-    if C_QuestLog and C_QuestLog.GetQuestObjectives and questID > 0 then
-        local objectives = C_QuestLog.GetQuestObjectives(questID)
-        if not objectives then return nil end
-        for _, objective in ipairs(objectives) do
-            local text = objective.text
-            if not text or text == "" or text:sub(1, 1) == " " then return nil end
-            if not objective.finished then list[#list + 1] = { objective.type, text } end
-        end
-        return list
-    end
-    if GetNumQuestLeaderBoards and GetQuestLogLeaderBoard then
-        for objective = 1, GetNumQuestLeaderBoards(index) do
-            local text, kind, finished = GetQuestLogLeaderBoard(objective, index)
-            if not text or text:sub(1, 1) == " " then return nil end
-            if not finished then list[#list + 1] = { kind, text } end
-        end
+    for _, objective in ipairs(objectives) do
+        local text = objective.text
+        if not text or text == "" or text:sub(1, 1) == " " then return nil end
+        if not objective.finished then list[#list + 1] = { objective.type, text } end
     end
     return list
 end
@@ -66,8 +56,8 @@ local function Signature()
     return table.concat(parts, "\2")
 end
 
--- the entries of a list sorted by key (Data's domains) whose key is
--- key, in their order: for _, entry in EachNamed(list, key)
+-- the entries of a list sorted by key (the data layer's domains) whose key is key, in their order:
+-- for _, entry in EachNamed(list, key)
 local function Named(state, i)
     i = i + 1
     local entry = state[1][i]
@@ -83,35 +73,42 @@ local function EachNamed(list, key)
     return Named, { list, key }, low - 1
 end
 
+-- Two quests asking for the same name share one entry: the quest still missing most of it is kept (its title and
+-- count).
+local itemMissing, monsterMissing = {}, {} -- name key -> how many the kept quest still lacks
+local function Keep(set, missing, key, title, text)
+    local have, need = text:match("(%d+)/(%d+)")
+    local lacking = have and need - have or 0
+    if missing[key] and missing[key] >= lacking then return end
+    missing[key], set[key] = lacking, title
+    progress[key] = have and (have .. "/" .. need)
+end
+
 local function Read()
     dirty = false
     wipe(items)
     wipe(monsters)
     wipe(progress)
+    wipe(itemMissing)
+    wipe(monsterMissing)
     wipe(questOfTitle)
     wipe(open)
     local inLog = {}
-    EachQuest(function(questID, title, index)
+    EachQuest(function(questID, title)
         inLog[questID] = true
         questOfTitle[title] = questID
-        if C_QuestLog and C_QuestLog.IsComplete and questID > 0 and C_QuestLog.IsComplete(questID) then return end
-        local list = Objectives(questID, index)
+        if C_QuestLog.IsComplete(questID) then return end
+        local list = Objectives(questID)
         if list then lastGood[questID] = list else list = lastGood[questID] or {} end
         open[questID] = list
         for _, objective in ipairs(list) do
             local kind, text = objective[1], objective[2]
             if kind == "item" and ITEM_PATTERN then
                 local name = text:match(ITEM_PATTERN)
-                if name then
-                    items[D.SearchKey(name)] = title
-                    progress[D.SearchKey(name)] = text:match("%d+/%d+")
-                end
+                if name then Keep(items, itemMissing, D.SearchKey(name), title, text) end
             elseif kind == "monster" and MONSTER_PATTERN then
                 local name = text:match(MONSTER_PATTERN)
-                if name then
-                    monsters[D.SearchKey(name)] = title
-                    progress[D.SearchKey(name)] = text:match("%d+/%d+")
-                end
+                if name then Keep(monsters, monsterMissing, D.SearchKey(name), title, text) end
             end
         end
     end)
@@ -120,8 +117,8 @@ local function Read()
     end
     -- built later (the first look after login): looked at again then
     if not (D.Built("items") and D.Built("npcs")) then dirty = true end
-    -- the passes below only when what is needed changed: the log changes with every kill and loot (QUEST_LOG_UPDATE), the
-    -- names seldom (two passes over 19,000 items and 13,000 NPCs took 8 ms of the first window)
+    -- the passes below only when what is needed changed: the log changes with every kill and loot (QUEST_LOG_UPDATE),
+    -- the names seldom (the passes go over all items and NPCs)
     local signature = Signature()
     local itemsBuilt, npcsBuilt, learned = D.State("data:items"), D.State("data:npcs"), D.State("drops")
     if signature == madeFor and itemsBuilt == madeItems and npcsBuilt == madeNPCs and learned == madeDrops
@@ -143,8 +140,8 @@ local function Read()
     for key in pairs(monsters) do
         for _, entry in EachNamed(D.Entries("npcs"), key) do npcsNeeded[entry.npcID] = true end
     end
-    -- from the NPCs' drop lists, not an item's list of droppers (it keeps only the best ones: Hogger was not among Linen
-    -- Cloth's); raw table: a pass over all NPCs, no accessor for that
+    -- from the NPCs' drop lists, not an item's list of droppers (it keeps only the best ones: Hogger was not among
+    -- Linen Cloth's); raw table: a pass over all NPCs, no accessor for that
     if next(drops) then
         for npcID, list in pairs(D.npcDrops or {}) do
             for item in list:gmatch("(%d+):") do
@@ -174,7 +171,7 @@ local function Drops(npcID)
 end
 
 -- the quest of your log an entry is needed for: quest ID (nil if the log names none), title; nil if none (the
--- suggestions window's menu opens it in the quest log)
+-- recommendations window's menu opens it in the quest log)
 function ns.QuestNeedOf(entry)
     Fresh()
     local title
@@ -216,25 +213,26 @@ local TESTS = {
 ns.RegisterReason({
     key = "questNeed",
     -- weight 1.1: what your quests ask for is what you look up most
-    stage = "know", weight = 1.1, label = "Quest need", learn = false, -- killing and looting leave no sure sign
-    -- to know (where is it): the search's start page. Not "do": in the suggestions window an item or foe of a quest only
-    -- repeated the quest's own row, which lists them (ns.QuestNeeds)
+    stage = "know", weight = 1.1, label = "Quest need",
+    learn = false, -- killing and looting leave no sure sign
+    -- to know (where is it): the search's start page. Not "do": in the recommendations window an item or foe of a quest
+    -- would only repeat the quest's own row, which lists them (ns.QuestNeeds)
     kind = "know",
     sources = { "items", "npcs" },
     depends = { "quests", "npcs", "drops", "data" },
     prepare = function()
         Fresh()
     end,
-    -- for knowing: the items to collect and the NPCs to defeat or that drop
-    -- them (one pass over the NPCs, only with a quest that needs something)
+    -- for knowing: the items to collect and the NPCs to defeat or that drop them (one pass over the NPCs, only with a
+    -- quest that needs something)
     candidates = function(add)
         Fresh()
         for itemID in pairs(drops) do add(D.ItemByID(itemID)) end
         for npcID in pairs(npcsNeeded) do add(D.NPCByID(npcID)) end
     end,
     test = function(entry) return TESTS[entry.domain](entry) end,
-    -- an item: the nearest NPC dropping it (quest areas lie around you: the
-    -- zone's reach without one known); an NPC: its distance
+    -- an item: the nearest NPC dropping it (quest areas lie around you: the zone's reach without one known); an NPC:
+    -- its distance
     reach = function(entry)
         if entry.domain == "npcs" then return ns.reach.NPC(entry) end
         -- no words: which NPC to get it from is the tooltip's Where, one answer in one place
@@ -244,8 +242,8 @@ ns.RegisterReason({
     end,
     -- the row: "Quest 3/10" (the objective's count), its tooltip the quest
     note = function(entry)
-        -- the count on the row only where it counts this entry: an NPC that drops the item gets none (its three droppers
-        -- would all say "0/3")
+        -- the count on the row only where it counts this entry: an NPC that drops the item gets none (its three
+        -- droppers would all say "0/3")
         local tip, key, own = nil, nil, true
         if entry.domain == "items" then
             -- (or "?": the quest log read anew since the strongest were kept)
@@ -260,6 +258,8 @@ ns.RegisterReason({
         end
         local count = key and progress[key]
         if count then tip = tip .. " (" .. count .. ")" end
-        return { icon = QUEST_ICON, tip = tip, text = count and own and L["Quest %s"]:format(count) or L["For a quest"] }
+        return {
+            icon = QUEST_ICON, tip = tip, text = count and own and L["Quest %s"]:format(count) or L["For a quest"]
+        }
     end,
 })

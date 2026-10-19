@@ -9,35 +9,35 @@ local L = ns.L
 
 local FRESH = 5 * 60 -- seconds a block counts
 
--- the formats that name what is missing: skill and level first (the plain
--- "Requires %s" would catch "Mining 50" as a name)
-local SKILL_FORMATS = { ERR_USE_LOCKED_WITH_SPELL_KNOWN_SI, SPELL_FAILED_MIN_SKILL, ITEM_MIN_SKILL }
-local NAME_FORMATS = { SPELL_FAILED_REAGENTS, ERR_USE_LOCKED_WITH_ITEM_S, SPELL_FAILED_TOTEMS, LOCKED_WITH_ITEM,
-    SPELL_FAILED_TOTEM_CATEGORY, ERR_USE_LOCKED_WITH_SPELL_S }
-local skillPatterns, namePatterns = {}, {}
-for _, format in ipairs(SKILL_FORMATS) do
-    local pattern = ns.FormatPattern(format, false, true)
-    if pattern then skillPatterns[#skillPatterns + 1] = pattern end
+-- the formats that name what is missing: skill and level first (the plain "Requires %s" would catch "Mining 50" as a
+-- name). Varargs: a format missing in this client is a nil in the middle and must not end the list.
+local function Patterns(...)
+    local list = {}
+    for i = 1, select("#", ...) do
+        local pattern = ns.FormatPattern((select(i, ...)), false, true)
+        if pattern then list[#list + 1] = pattern end
+    end
+    return list
 end
-for _, format in ipairs(NAME_FORMATS) do
-    local pattern = ns.FormatPattern(format, false, true)
-    if pattern then namePatterns[#namePatterns + 1] = pattern end
-end
+local skillPatterns = Patterns(ERR_USE_LOCKED_WITH_SPELL_KNOWN_SI, SPELL_FAILED_MIN_SKILL, ITEM_MIN_SKILL)
+local namePatterns = Patterns(SPELL_FAILED_REAGENTS, ERR_USE_LOCKED_WITH_ITEM_S, SPELL_FAILED_TOTEMS,
+    LOCKED_WITH_ITEM, SPELL_FAILED_TOTEM_CATEGORY, ERR_USE_LOCKED_WITH_SPELL_S)
 
 local blocked = {} -- entry ID -> { time(), message }
 
--- a profession by its name: skill line (Data's names, English)
+-- a profession by its name: skill line (the data layer's names, English)
 local skillOfName
 local function SkillOf(name)
     if not skillOfName then
         skillOfName = {}
-        for skillLine, skillName in pairs(D.professionNames or {}) do skillOfName[D.SearchKey(skillName)] = skillLine end
+        for skillLine, skillName in pairs(D.professionNames or {}) do
+            skillOfName[D.SearchKey(skillName)] = skillLine
+        end
     end
     return skillOfName[D.SearchKey(name)]
 end
 
--- an item by its name: the first entry whose key is the name's (the
--- items are sorted by key)
+-- an item by its name: the first entry whose key is the name's (the items are sorted by key)
 local function ItemNamed(name)
     local key, list = D.SearchKey(name), D.Entries("items")
     local low, high = 1, #list + 1
@@ -57,7 +57,7 @@ local function EntryOf(name)
 end
 
 ns.On("UI_ERROR_MESSAGE", function(_, _, message)
-    if type(message) ~= "string" or (issecretvalue and issecretvalue(message)) then return end
+    if type(message) ~= "string" or D.Secret(message) then return end
     local entry
     for _, pattern in ipairs(skillPatterns) do
         local name = message:match(pattern)
@@ -78,13 +78,7 @@ end)
 -- how fresh: 1 right after the message, 0 after FRESH; nil if none
 local function Freshness(id)
     local block = id and blocked[id]
-    if not block then return nil end
-    local share = 1 - (time() - block[1]) / FRESH
-    if share <= 0 then
-        blocked[id] = nil
-        return nil
-    end
-    return share
+    return block and ns.Fade(blocked, id, block[1], FRESH)
 end
 
 ns.RegisterReason({
@@ -93,7 +87,7 @@ ns.RegisterReason({
     stage = "know", weight = 1.2, label = "Blocked you",
     kind = "know",
     sources = { "items", "npcs" },
-    depends = { "rec:blocked" }, -- (fading with time: kept at most STALE seconds, Reasons.lua)
+    depends = { "rec:blocked" }, -- fades with time: kept at most STALE seconds (Reasons.lua)
     candidates = function(add)
         for id in pairs(blocked) do add(D.EntryByID(id)) end
     end,
@@ -102,6 +96,7 @@ ns.RegisterReason({
         return share and (0.4 + 0.6 * share) or nil
     end,
     reach = function() return ns.reach.NOW, nil end,
+    errand = false, -- the note is the same for every item or trainer it names
     note = function() return L["Blocked you"] end,
     why = function(entry)
         local block = blocked[D.EntryID(entry)]

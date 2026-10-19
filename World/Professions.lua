@@ -1,11 +1,10 @@
 local _, D = ...
 
 -- Professions: recipes of every profession (Data\ProfessionSpells.lua). Learned ones are plain
--- entries, the others hidden = true. Icon is the made item's if any. Built in the background
--- (2,666 recipes).
+-- entries, the others hidden = true. Icon is the made item's if any. Built in the background.
 -- Also: your professions and skill (D.ProfessionRanks), what a recipe makes and needs
 -- (D.RecipeOf, D.RecipesMaking, D.RecipesUsing), learnability (D.RecipeLearnable, D.LearnableNow),
--- skill colour and skill-up chance (D.RecipeSkillColor, D.RecipeSkillChance), and how often
+-- skill color and skill-up chance (D.RecipeSkillColor, D.RecipeSkillChance), and how often
 -- your bags can make it (D.CraftTimes).
 
 local KEY = "professions"
@@ -26,7 +25,6 @@ D.professionIcons = {
 
 -- A skill line you have (weapon skills and professions): { name, rank, max, modifier, description }, else nil
 function D.SkillLineInfo(id)
-    if not (C_SkillInfo and C_SkillInfo.GetSkillLineInfoByID) then return nil end
     local ok, info = pcall(C_SkillInfo.GetSkillLineInfoByID, id)
     if not ok or type(info) ~= "table" or not info.name or (info.maxRank or 0) == 0 then return nil end
     return { name = info.name, rank = info.rank or 0, max = info.maxRank, modifier = info.modifier or 0,
@@ -77,7 +75,7 @@ local RETRY = 60
 local function ItemKnown(itemID) return D.itemNamesEN == nil or D.itemNamesEN[itemID] ~= nil end
 function D.RecipeOf(spellID, skillLine)
     local recipe = D.recipes[spellID]
-    if recipe or not (C_TradeSkillUI and C_TradeSkillUI.GetRecipeSchematic) then return recipe end
+    if recipe then return recipe end
     local at = asked[spellID]
     if at == true or (at and GetTime() - at < RETRY) then return nil end
     asked[spellID] = GetTime()
@@ -101,10 +99,9 @@ function D.RecipeOf(spellID, skillLine)
 end
 -- Loads every recipe: professions' plus other item-making spells (Data\OtherRecipes.lua); for the reverse maps below
 local allAsked = false
-local function NoPause() end
 function D.AllRecipes(Pause)
     if allAsked then return D.recipes end
-    Pause = Pause or NoPause
+    Pause = Pause or D.NoPause
     for skillLine, data in pairs(D.professionSpells or {}) do
         for i = 1, #data, 5 do
             D.RecipeOf(data[i], skillLine)
@@ -130,7 +127,7 @@ local usedFor, madeFrom
 local NONE = {}
 local function Maps(Pause)
     if usedFor then return end
-    Pause = Pause or NoPause
+    Pause = Pause or D.NoPause
     local used, made = {}, {}
     local recipes = D.AllRecipes(Pause)
     local function Note(map, itemID, spellID)
@@ -193,7 +190,7 @@ function D.CraftingRecipe(entry)
         local recipe = D.recipes[spellID]
         local line = recipe and recipe[3]
         if line and ranks[line] then
-            if IsPlayerSpell(spellID) then return spellID, line end
+            if D.SpellKnown(spellID) then return spellID, line end
             fallback = fallback or { spellID, line }
         end
     end
@@ -229,7 +226,7 @@ local function Collect(list, Pause)
     local meta = D.Meta(KEY)
     local count = 0
     -- A recipe of two professions (Synthetic Gordok Ogre Suit: leatherworking and tailoring) is
-    -- two entries, each with an ID including its skill line (one shared ID lost one)
+    -- two entries, each with an ID that includes its skill line
     local seen, twice = {}, {}
     for _, data in pairs(D.professionSpells or {}) do
         for i = 1, #data, 5 do
@@ -255,14 +252,15 @@ local function Collect(list, Pause)
                 local made = recipe and recipe[1] ~= 0 and recipe[1]
                 local icon = made and select(5, C_Item.GetItemInfoInstant(made)) or C_Spell.GetSpellTexture(id)
                 local skill = data[i + 1]
-                -- skill to learn it: the recipe item's where it differs (Data\ProfessionSpells.lua), else the yellow rank
+                -- skill to learn it: the recipe item's where it differs (Data\ProfessionSpells.lua), else the
+                -- yellow rank
                 local learn = data[i + 3] ~= 0 and D.recipeLearnRanks and D.recipeLearnRanks[id] or skill
                 list[#list + 1] = setmetatable({
                     name = name, icon = icon, spellID = id,
                     category = known and profession or ("%s  ·  %d"):format(profession or "", learn),
                     hidden = not known,
-                    skillLine = skillLine, skill = skill, learn = learn, acquire = data[i + 2], recipeItem = data[i + 3],
-                    grey = data[i + 4],
+                    skillLine = skillLine, skill = skill, learn = learn, acquire = data[i + 2],
+                    recipeItem = data[i + 3], grey = data[i + 4],
                     entryID = twice[id] and ("s:" .. id .. ":" .. skillLine) or nil,
                 }, meta)
                 if known then learned[name] = list[#list] end
@@ -282,7 +280,7 @@ D.RegisterDomain({
         local known = 0
         for _, data in pairs(D.professionSpells or {}) do
             for i = 1, #data, 5 do
-                if IsPlayerSpell(data[i]) then known = known + 1 end
+                if D.SpellKnown(data[i]) then known = known + 1 end
             end
         end
         return tostring(known)
@@ -314,11 +312,11 @@ function D.RecipeSpecializationMissing(spellID)
     local need = D.recipeSpecializations and D.recipeSpecializations[spellID]
     if not need then return nil end
     if type(need) == "number" then
-        if IsPlayerSpell(need) then return nil end
+        if D.SpellKnown(need) then return nil end
         return need
     end
     for _, spell in ipairs(need) do
-        if IsPlayerSpell(spell) then return nil end
+        if D.SpellKnown(spell) then return nil end
     end
     return need[1]
 end
@@ -350,7 +348,7 @@ function D.RecipeItemFrom(recipe)
         if npc then return "sold", npc end
     end
     local dropped = D.itemDroppedBy and D.itemDroppedBy[item]
-    -- not "dropped and dropped:match(...)": "and" keeps only the first result, so chance was nil
+    -- (`dropped and dropped:match(...)` would keep only the first result)
     local npcID, chance
     if dropped then npcID, chance = dropped:match("(%d+):(%d+)") end
     if npcID then
@@ -360,7 +358,7 @@ function D.RecipeItemFrom(recipe)
     return nil
 end
 
--- Colour of a learned recipe in the profession window by your skill: "orange" below the yellow
+-- Color of a learned recipe in the profession window by your skill: "orange" below the yellow
 -- rank, "yellow" up to halfway to grey, then "green", "grey" from the grey rank (no skill up).
 -- Nil without a skill to compare (specialisations, profession ranks) or if not learned.
 function D.RecipeSkillColor(entry)
@@ -377,7 +375,7 @@ end
 -- Chance 0..1 that making a learned recipe raises your skill: sure up to the yellow rank, then
 -- falling linearly to none at the grey rank. Blizzard never published the numbers (only orange
 -- 100 % and grey 0 % are certain); this is the emulators' CraftSkillGainChance formula
--- (AzerothCore, PlayerUpdates.cpp). Nil as the colour.
+-- (AzerothCore, PlayerUpdates.cpp). Nil as the color.
 function D.RecipeSkillChance(entry)
     if not D.RecipeSkillColor(entry) then return nil end
     local rank = D.ProfessionRanks()[entry.skillLine]
@@ -404,7 +402,7 @@ function D.RecipeLearnable(recipe, yourRanks)
     if recipe.recipeItem ~= 0 and D.RecipeItemFrom(recipe) == nil then return nil end
     if D.RecipeSpecializationMissing(recipe.spellID) then return nil end
     -- trainer recipes: once a trainer of the profession was seen, only what one listed
-    -- (World\LearnTrainers.lua; the 1.12 data had a fisherman teach Find Fish, Forever's does not)
+    -- (World\LearnTrainers.lua; e.g. the 1.12 data lets a fisherman teach Find Fish, Forever's does not)
     if recipe.recipeItem == 0 and D.TrainerListed and D.TrainerListed(recipe.spellID, recipe.skillLine) == false then
         return nil
     end
@@ -427,14 +425,14 @@ function D.LearnableNow(entry)
     return false
 end
 
-local GetCount = C_Item and C_Item.GetItemCount or GetItemCount
+local GetCount = C_Item.GetItemCount
 local countsCache = D.Cache({ "frame" }) -- item ID -> count in your bags; per frame
 
 local function Count(itemID)
     local counts = countsCache.Get()
     local count = counts[itemID]
     if not count then
-        count = GetCount and GetCount(itemID) or 0
+        count = GetCount(itemID)
         counts[itemID] = count
     end
     return count

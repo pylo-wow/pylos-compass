@@ -4,9 +4,9 @@ local D = ns.data
 
 -- Context menu: a right click on a result (or the detail view's symbol, or a filter) opens the menu
 -- (UI\Kit\Widgets.lua) at the cursor: what can be done with the entry without opening it first.
--- Casting and using are not in it (protected: only the detail view's and Ctrl+Enter's secure buttons can);
--- opening a profession window is, as a casting line. Escape or a new list close it too; the keys walk it
--- (Input.lua).
+-- Casting and using are protected: only a secure button can do them (Ctrl+Enter's, or a menu line with a spell
+-- or macro text). Opening a profession window is in the menu, as such a line. Escape or a new list close it
+-- too; the keys walk it (Input.lua).
 
 local W = ns.widgets
 local ui = ns.ui
@@ -38,6 +38,19 @@ ui.MenuStep, ui.MenuConfirm = menu.Step, menu.Confirm
 local SYMBOLS = W.SYMBOLS
 local function SymbolOf(file) return file and { file = file, crop = true } or nil end
 
+-- Shared with the recommendations window (Advice\Window.lua, loaded later).
+-- The spell that opens the profession window of a recipe of yours, or of an item one of your professions
+-- makes; its skill line.
+function ns.ProfessionWindow(entry)
+    local recipeID, skillLine = D.CraftingRecipe(entry)
+    return recipeID and D.ProfessionWindowSpell(skillLine), skillLine
+end
+-- The quest is in your log and the client can open it (Forever's quest log is the world map's:
+-- QuestMapFrame_OpenToQuestDetails).
+function ns.QuestInLog(questID)
+    return questID and QuestMapFrame_OpenToQuestDetails and C_QuestLog.IsOnQuest(questID)
+end
+
 -- The group finder's activities of an instance (its wings: Scarlet Monastery has four), nil if it has none or
 -- the client lacks the finder. Forever's is vanilla-style (Blizzard_GroupFinder_VanillaStyle, loaded on demand
 -- by GroupFinderVanillaStyle_LoadUI; LFGBrowseFrame:ShowSearchForActivities opens its browse tab and
@@ -60,27 +73,25 @@ end
 
 -- the menu of an entry (fromDetail: its detail view is open already; byKey: opened with the space bar,
 -- below the detail view's symbol). The same groups for every kind (empty ones left out):
---   open   the main line first (its profession window, the quest log, else Details)
---   lists  its links in the order its kind needs them (Links\Order.lua)
---   do     tools, waypoint, trying on, the action bar, the chat
---   bar    your word on it as a suggestion, forgetting your choices
+--   open        the main line first (its profession window, the quest log, else Details)
+--   lists       its links in the order its kind needs them (Links\Order.lua)
+--   do          tools, waypoint, trying on, the action bar, the chat
+--   suggestion  your word on it as a suggestion, forgetting your choices
 function ui.ShowMenu(entry, fromDetail, byKey)
     if not entry or entry.header then return end
     local target = entry.target or entry
     local plain = not target.scope and not target.filter
     local look, lists, act, rate = {}, {}, {}, {}
     -- a recipe of yours, or an item one of your professions makes: its profession window, at that recipe; the
-    -- main line. (Not "x and f()": "and" keeps only the first of the two results.)
-    local recipeID, skillLine = D.CraftingRecipe(target)
-    local window = recipeID and D.ProfessionWindowSpell(skillLine)
+    -- main line
+    local window, skillLine = ns.ProfessionWindow(target)
     if window then
         look[#look + 1] = { L["Open %s"]:format(window), function() ns.Close() end, window,
-            icon = SymbolOf(ns.professionIcons[skillLine]), main = true }
+            icon = SymbolOf(D.professionIcons[skillLine]), main = true }
     end
-    -- a quest of your log: the quest log at it (Forever's is the world map's: QuestMapFrame_OpenToQuestDetails);
-    -- the main line
+    -- a quest of your log: the quest log at it; the main line
     local questID = target.questID
-    local inLog = questID and QuestMapFrame_OpenToQuestDetails and C_QuestLog.IsOnQuest(questID)
+    local inLog = ns.QuestInLog(questID)
     if inLog then
         look[#look + 1] = { L["Open in quest log"], function()
             ns.Close()
@@ -109,7 +120,7 @@ function ui.ShowMenu(entry, fromDetail, byKey)
         act[#act + 1] = { L["Set waypoint"], function() W.Waypoint(target.name, place) end, icon = SYMBOLS.waypoint }
     end
     local activities = target.mapID and GroupActivities(target.mapID)
-    -- C_LFGList.Search is protected: called from addon code it was blocked and the finder hung at "Searching...";
+    -- C_LFGList.Search is protected: called from addon code it is blocked and the finder hangs at "Searching...";
     -- so the line is a secure button running it as a macro on your click, as a line that casts does
     if activities and not InCombatLockdown() then
         local macro = ("/run GroupFinderVanillaStyle_LoadUI() LFGBrowseFrame:ShowSearchForActivities({%s})")
@@ -152,7 +163,7 @@ function ui.ShowMenu(entry, fromDetail, byKey)
     if known and (ns.memory.Knows(known) or ns.rec.Knows(known)) then
         rate[#rate + 1] = { SYMBOLS.forget, L["Forget my choices"], function() ns.view.Forget(target) end }
     end
-    ui.menuGroups = { look, lists, act } -- (the last menu's lines: the test harness reads them)
+    ui.menuGroups = { look, lists, act } -- the last menu's lines
     -- anchored to the icon's button (a frame): the menu holds secure buttons, and a protected frame's anchors
     -- cannot lead to a texture (UI\Detail.lua)
     OpenMenu(ui.menuGroups, byKey and ui.detail.iconButton or nil, rate)

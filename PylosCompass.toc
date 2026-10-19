@@ -9,35 +9,38 @@
 ## SavedVariables: PylosCompassDB, PylosCompassWorldDB, PylosCompassEngineDB
 ## IconTexture: Interface\Icons\INV_Misc_Spyglass_02
 
+# Kit: options, saved variables, minimap button, widgets
 Kit\Kit.lua
 UI\Kit\Widgets.lua
-Init.lua
+
+# Core: namespace, events, maps, state, background builder, saved data
+Core\Init.lua
 Core\Core.lua
 Core\State.lua
 Core\Map.lua
 Core\Build.lua
 Core\Saved.lua
+
+# You: the current character
 You\Zone.lua
 You\Bags.lua
 You\QuestLog.lua
 You\Taxi.lua
 You\Hearth.lua
 You\Character.lua
+
+# Data: generated game data
 Data\ItemNames_enUS.lua
 Data\OtherRecipes.lua
 Data\ItemFacts.lua
 Data\ItemStats.lua
-World\ItemStats.lua
 Data\ClassSpells.lua
-Data\Buffs.lua
-World\Buffs.lua
 Data\ProfessionSpells.lua
 Data\NPCNames_enUS.lua
 Data\NPCFacts.lua
 Data\NPCLinks.lua
 Data\ItemPrices.lua
 Data\Gathering.lua
-Data\Nodes.lua
 Data\NPCPlaces.lua
 Data\Dungeons_enUS.lua
 Data\TravelNet.lua
@@ -47,6 +50,9 @@ Data\QuestFacts.lua
 Data\QuestLinks.lua
 Data\Events.lua
 Data\Seen.lua
+
+# World: the game's domains and what is learned while playing
+World\ItemStats.lua
 World\Spells.lua
 World\Items.lua
 World\Gathering.lua
@@ -63,6 +69,8 @@ World\LearnNPCs.lua
 World\LearnQuests.lua
 World\LearnTrainers.lua
 World\LearnCrossings.lua
+
+# Engine: what is worth doing or looking up
 Engine\Core.lua
 Engine\Memory.lua
 Engine\Reach.lua
@@ -97,6 +105,8 @@ Engine\Reasons\QuestZone.lua
 Engine\Reasons\QuestLog.lua
 Engine\Relevant.lua
 Engine\API.lua
+
+# Search: the search bar
 Search\Core.lua
 Search\Recommend.lua
 Search\Memory.lua
@@ -135,11 +145,15 @@ Search\Filters\Later.lua
 Search\Filters\SkillUp.lua
 Search\View.lua
 Search\Input.lua
-Search\Spotlight.lua
+Search\Control.lua
+
+# Advice: the recommendations window and the nudges
 Advice\Core.lua
 Advice\Subtopics.lua
 Advice\Window.lua
 Advice\Push.lua
 Advice\Pushes.lua
 Advice\Toast.lua
-Compass.lua
+
+# Options page and global API (last: it reads the options of the search and the recommendations)
+Core\Options.lua

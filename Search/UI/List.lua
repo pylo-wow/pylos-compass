@@ -12,10 +12,10 @@ local bar = ui.bar
 local ROW_HEIGHT, DOT = W.ROW_HEIGHT, W.DOT
 local Clamp = W.Clamp
 
-local LIST_GAP = 6
+local WINDOW_GAP = ui.WINDOW_GAP
 local list = CreateFrame("Frame", nil, bar)
-list:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, -LIST_GAP)
-list:SetPoint("TOPRIGHT", bar, "BOTTOMRIGHT", 0, -LIST_GAP)
+list:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, -WINDOW_GAP)
+list:SetPoint("TOPRIGHT", bar, "BOTTOMRIGHT", 0, -WINDOW_GAP)
 list:Hide()
 W.Panel(list)
 ui.Art(list)
@@ -26,7 +26,7 @@ list.empty = W.Empty(list)
 list.empty:SetText(L["Nothing found"])
 
 local rows = {}
-ui.rows = rows -- (the test harness reads them)
+ui.rows = rows
 -- Rows slide in from the right (ROW_SHIFT px, with a fade); a row that only
 -- gets a new entry moves ROW_NUDGE px and brightens from ROW_DIM
 local ROW_TIME, ROW_STAGGER, ROW_SHIFT = 0.18, 0.03, 12
@@ -38,14 +38,12 @@ function ui.Pickup(entry)
     entry = entry and (entry.target or entry)
     if not entry or entry.scope or entry.filter then return end
     if entry.itemID then
-        local PickupItem = C_Item and C_Item.PickupItem or _G.PickupItem
-        if PickupItem then PickupItem(entry.itemID) end
+        C_Item.PickupItem(entry.itemID)
         return
     end
     local spellID = entry.type == "spell" and entry.value
-    if not spellID or (C_Spell.IsSpellPassive and C_Spell.IsSpellPassive(spellID)) then return end
-    local PickupSpell = C_Spell.PickupSpell or _G.PickupSpell
-    if PickupSpell then PickupSpell(spellID) end
+    if not spellID or C_Spell.IsSpellPassive(spellID) then return end
+    C_Spell.PickupSpell(spellID)
 end
 
 -- A row: icon, name and a grey line of details on the left; state for you and the reason on the right; the icon
@@ -65,7 +63,8 @@ function ui.RowParts(row, height)
     W.RowParts(row, height)
     -- an NPC's portrait is round, as the game shows portraits, without the square frame of an action button
     row.round = row:CreateMaskTexture()
-    row.round:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    row.round:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask",
+        "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
     row.round:SetAllPoints(row.icon)
     -- the reason a suggestion has (as text), or a link's info: right, on the line of details, under the state
     row.why = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -165,7 +164,7 @@ local function Describe(entry, linked, mixed)
     elseif entry.filter then
         parts = { entry.category, FilterSources(entry.filter) }
     elseif entry.details then
-        -- a row with texts of its own (a zone in a link's list, Links\Zones.lua)
+        -- a row with texts of its own (a zone in a link's list, Links\More.lua)
         parts = { entry.details }
     else
         parts = { not linked and entry.category or nil }
@@ -219,10 +218,17 @@ local function Slide(row, value)
 end
 local sliding = { duration = ROW_TIME, apply = Slide }
 
+-- what scrolls: total, shown at once, first shown (0-based); the overview by lines of cells, the list by rows
+local function ScrollState()
+    local overview = ui.overview
+    if overview and overview:IsShown() then return overview.lines, ui.OVERVIEW_LINES, overview.top end
+    return #S.results, ui.Rows(), S.top
+end
+
 local function PlaceThumb()
     if not scroll:IsShown() then return end
     local height = scroll:GetHeight()
-    local total, visible, top = ui.ScrollState()
+    local total, visible, top = ScrollState()
     local size = math.max(height * visible / math.max(total, 1), THUMB_MIN)
     local offset = (height - size) * top / math.max(total - visible, 1)
     scroll.thumb:SetHeight(size)
@@ -248,8 +254,8 @@ local seen = {} -- entries of the current results shown already
 --           a hotkey is no state, the tooltip says it (UI\Tooltip.lua)
 --   reason  on the line of details: why a suggestion is listed (the recommendations' reason as text), grey
 -- One meaning per place, nothing pushes the other out. Tones (ns.TONES): good (can be done now), active
--- (going on), done (of no use to you), no (not possible yet), plain (a fact: a distance); or a colour of its own
--- (a recipe's skill colour). The symbol is grey where the tone is done or no.
+-- (going on), done (of no use to you), no (not possible yet), plain (a fact: a distance); or a color of its own
+-- (a recipe's skill color). The symbol is grey where the tone is done or no.
 local TONES = ns.TONES
 -- a recipe item of no use right now in a link's list (D.RecipeState); items' own rows: Sources\Items.lua
 local RECIPE_STATES = ns.RECIPE_STATES
@@ -263,7 +269,7 @@ local function StateOf(entry)
 end
 
 -- A row's texts for an entry, as ui.FillRow shows them (also the detail view's head): the line of details,
--- the state and its colour, the reason (opts as ui.FillRow's), and whether it is dimmed
+-- the state and its color, the reason (opts as ui.FillRow's), and whether it is dimmed
 function ui.RowTexts(entry, opts)
     local state, tone = StateOf(entry)
     local color = TONES[tone] or type(tone) == "table" and tone or nil
@@ -273,10 +279,10 @@ function ui.RowTexts(entry, opts)
     return Describe(entry, opts.linked, opts.mixed), state or "", color, why, dimmed
 end
 
--- A row's content for an entry, the same in the list and in the detail view's previews: icon, name's colour,
+-- A row's content for an entry, the same in the list and in the detail view's previews: icon, name's color,
 -- details, state on the right and the reason (or a link's info) below it. The row is one of W.RowParts' with
 -- a why font string. opts: linked (a link's list: its info below on the right), mixed (the kind first in the
--- details), note (a suggestion's reason), size (the row's height).
+-- details), note (a suggestion's reason).
 function ui.FillRow(row, entry, opts)
     -- an item's data is requested as soon as its row shows, so its tooltip is complete when marked
     if entry.itemID and not C_Item.IsItemDataCachedByID(entry.itemID) then
@@ -285,7 +291,7 @@ function ui.FillRow(row, entry, opts)
     if row.entry ~= entry then
         ui.ItemDetails(entry)
         row.entry = entry
-        W.ShowIcon(row.icon, entry, (opts.size or ROW_HEIGHT) - 10)
+        W.ShowIcon(row.icon, entry, ROW_HEIGHT - 10)
         local round = Real(entry).domain == "npcs"
         if round ~= row.isRound then
             if round then row.icon:AddMaskTexture(row.round) else row.icon:RemoveMaskTexture(row.round) end
@@ -297,7 +303,7 @@ function ui.FillRow(row, entry, opts)
         W.ShowQuality(row.quality, entry)
     end
     -- its texts (ui.RowTexts): the state for you (the source's, asked on every draw: it changes with bags,
-    -- level, log) and its colour; grey when not possible yet, of no use, or not learned and not learnable now
+    -- level, log) and its color; grey when not possible yet, of no use, or not learned and not learnable now
     local details, state, color, why, dimmed = ui.RowTexts(entry, opts)
     row.tone, row.dimmed = color, dimmed
     row.icon:SetDesaturated(row.dimmed)
@@ -385,18 +391,23 @@ function ui.RenderRows()
     ui.MarkRows()
 end
 
--- The typed part of a name in an accent colour: gold on the light names, white on the marked gold one.
+-- The typed part of a name in an accent color: gold on the light names, white on the marked gold one.
+local function ColorHex(color)
+    return ("ff%02x%02x%02x"):format(color[1] * 255, color[2] * 255, color[3] * 255)
+end
+local ACCENT, ACCENT_MARKED = ColorHex(W.GOLD), ColorHex(W.WHITE)
 local function Highlighted(name, on)
     local typed = ns.SearchKey(S.query)
     local key, map = D.SearchKey(name, true)
     local from, to = key:find(typed, 1, true)
     if typed == "" or not from then return name end
     from, to = map[from], map[to]
-    local color = on and "ffffffff" or "ffffd100"
+    local color = on and ACCENT_MARKED or ACCENT
     return name:sub(1, from - 1) .. "|c" .. color .. name:sub(from, to) .. "|r" .. name:sub(to + 1)
 end
 
--- shows which row is marked: the selection bar, the name in gold; the others light (dimmed: not learned yet), icons a little dimmed
+-- shows which row is marked: the selection bar, the name in gold; the others light (dimmed: not learned yet),
+-- icons a little dimmed
 function ui.MarkRows()
     for i, row in ipairs(rows) do
         local entry = row.entry
@@ -418,20 +429,13 @@ function ui.MarkRows()
     end
 end
 
--- what scrolls: total, shown at once, first shown (0-based); the overview by lines of cells, the list by rows
-function ui.ScrollState()
-    local overview = ui.overview
-    if overview and overview:IsShown() then return overview.lines, ui.OVERVIEW_LINES, overview.top end
-    return #S.results, ui.Rows(), S.top
-end
-
 local function Scrolls()
-    local total, visible = ui.ScrollState()
+    local total, visible = ScrollState()
     return total > visible
 end
 
 local function ScrollTo(newTop)
-    local total, visible, top = ui.ScrollState()
+    local total, visible, top = ScrollState()
     newTop = math.min(math.max(newTop, 0), total - visible)
     if newTop == top then return end
     if ui.overview:IsShown() then return ui.ScrollOverview(newTop) end
@@ -450,7 +454,7 @@ end
 -- dragging: the cursor's place on the track picks the shown part (every frame while held)
 local function ScrollToCursor()
     local _, y = GetCursorPosition()
-    local total, visible = ui.ScrollState()
+    local total, visible = ScrollState()
     local fraction = (scroll:GetTop() - y / scroll:GetEffectiveScale()) / scroll:GetHeight()
     ScrollTo(math.floor(fraction * (total - visible) + 0.5))
 end
@@ -465,7 +469,7 @@ scroll:SetScript("OnHide", function(self) self:SetScript("OnUpdate", nil) end)
 list:EnableMouseWheel(true)
 list:SetScript("OnMouseWheel", function(_, delta)
     if not Scrolls() then return end
-    local _, _, top = ui.ScrollState()
+    local _, _, top = ScrollState()
     ScrollTo(top - delta)
 end)
 

@@ -5,23 +5,22 @@ local L = ns.L
 -- Skill up: a recipe you know that still raises your skill: orange, yellow or green in the profession window
 -- (D.RecipeSkillColor). As strong as the chance of a point (D.RecipeSkillChance: orange sure, yellow 100 to 50 %, green
 -- 50 to 0 %), as a green recipe is seldom worth its materials. Without the materials in your bags its reach is the
--- zone's: they are still to be got. The filter "Skill up" stands on it (any strength).
+-- zone's: they are still to be got. The search's filter "Skill up" uses the chance alone (above 0).
 --
--- What a point costs: of the recipes you can make now, the one using the least materials for a point comes first. The
--- materials are valued at what a vendor pays for them (the client's sell price), so different materials compare too; one
--- whose value the client does not know is left out of the comparison. A recipe making something you would wear (the
--- reason "upgrade" on its item) is worth its cost.
+-- What a point costs: of the recipes you can make now, the one using the least materials for a point comes first.
+-- The materials are valued at what a vendor pays for them (the client's sell price), so different materials compare
+-- too; one whose value the client does not know is left out of the comparison. A recipe making something you would
+-- wear (the reason "upgrade" on its item) is worth its cost.
 --   strength = chance x (CHEAPEST_SHARE + the rest x cheapest cost / its cost)
 
 local CHEAPEST_SHARE = 0.4 -- what the dearest way to a point keeps
 
-local GetInfo = C_Item and C_Item.GetItemInfo or GetItemInfo
-local costs = {}     -- entry -> cost of a point (copper) or false; per search
-local cheapest = {}  -- skill line -> lowest cost of a point among the recipes you can make now
+local costs = {}     -- entry -> cost of a point (copper) or false; see prepare
+local cheapest = {}  -- skill line -> lowest cost of a point among the recipes you can make now; see prepare
 
 -- what one of an item fetches at a vendor, nil if the client does not know
 local function Worth(itemID)
-    local sellPrice = GetInfo and select(11, GetInfo(itemID))
+    local sellPrice = select(11, C_Item.GetItemInfo(itemID))
     return sellPrice and sellPrice > 0 and sellPrice or nil
 end
 
@@ -54,13 +53,13 @@ local function Cost(entry)
     return cost
 end
 
--- the lowest cost of a point among the recipes of a profession you can make now (once per search)
+-- the lowest cost of a point among the recipes of a profession you can make now (once per prepare)
 local function Cheapest(skillLine)
     local known = cheapest[skillLine]
     if known ~= nil then return known end
     local best = false
     for _, entry in ipairs(D.Entries("professions")) do
-        -- the colour asked directly: the reason's own test would come back here
+        -- the color asked directly: the reason's own test would come back here
         local chance = entry.skillLine == skillLine and not entry.hidden and D.RecipeSkillChance(entry)
         if chance and chance > 0 and D.CraftTimes(entry) > 0 and not MakesUpgrade(entry) then
             local cost = Cost(entry)
@@ -71,8 +70,8 @@ local function Cheapest(skillLine)
     return best
 end
 
--- how much of the colour's strength is left for what the point costs (1:
--- the cheapest way, or its cost not known, or it makes an upgrade)
+-- how much of the color's strength is left for what the point costs (1: the cheapest way, or its cost not known, or it
+-- makes an upgrade)
 local function Economy(entry)
     if not D.CraftTimes or D.CraftTimes(entry) == 0 or MakesUpgrade(entry) then return 1 end
     local cost, best = Cost(entry), Cheapest(entry.skillLine)
@@ -103,7 +102,7 @@ ns.RegisterReason({
         return ns.reach.ZONE, L["needs materials"]
     end,
     profession = true,
-    -- the tooltip's line on it, with the colour and what a point costs
+    -- the tooltip's line on it, with the color and what a point costs
     why = function(entry)
         local color = D.RecipeSkillColor(entry)
         local text = L["Still raises your skill (%s, %d %% chance)"]:format(L[color],
@@ -114,7 +113,8 @@ ns.RegisterReason({
             else
                 local cost, best = Cost(entry), Cheapest(entry.skillLine)
                 if cost and best and cost > best then
-                    text = text .. ns.DOT .. L["a point costs %d %% more than with the cheapest recipe"]:format(math.floor((cost / best - 1) * 100 + 0.5))
+                    text = text .. ns.DOT .. L["a point costs %d %% more than with the cheapest recipe"]:format(
+                        math.floor((cost / best - 1) * 100 + 0.5))
                 end
             end
         end

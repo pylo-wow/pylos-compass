@@ -2,10 +2,10 @@ local _, D = ...
 local ns = D.engine
 local L = ns.L
 
--- Sells learnable: a vendor with recipe items of your professions whose recipe you can learn now (D.RecipeLearnable;
--- recipes for later are no next step). Strength 1 for one recipe, +0.5 for each doubling, at most 2 (Reasons.lua: Grow).
--- The row shows a recipe scroll with how many. A recipe item you already have (in your bags, not learned yet) does not
--- count: no need to buy it again.
+-- Sells learnable: a vendor with recipe items of your professions whose recipe you can learn now
+-- (D.RecipeLearnable; recipes for later are no next step). Strength 1 for one recipe, +0.5 for each doubling, at most
+-- 2 (Reasons.lua: Grow). The row shows a recipe scroll with how many. A recipe item you already have (in your bags,
+-- not learned yet) does not count: no need to buy it again.
 
 local function Count(npcID)
     local now = 0
@@ -33,6 +33,6 @@ ns.RegisterReason({
     note = function(entry)
         local now = Count(entry.npcID)
         return { icon = "Interface\\Icons\\INV_Scroll_03", count = now,
-            tip = L["Sells %d recipes you can learn now"]:format(now) }
+            tip = L["Recipes you can learn now: %d"]:format(now) }
     end,
 })

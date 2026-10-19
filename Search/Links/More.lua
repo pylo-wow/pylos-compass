@@ -8,7 +8,7 @@ local D = ns.data
 local LinkedItem, LinkedEntry = ns.LinkedItem, ns.LinkedEntry
 local ZONE_ICON = 134269
 
--- A zone as a row: its name, the continent below, its levels on the right coloured by how hard it is
+-- A zone as a row: its name, the continent below, its levels on the right colored by how hard it is
 -- for you (as a dungeon's), info below on the right; Enter opens the world map at it
 local function ZoneRow(zoneID, info)
     local map = C_Map.GetMapInfo(zoneID)
@@ -33,7 +33,7 @@ end
 
 -- Zones in the order that suits you: the one you are in, then those of your continent, then by how near
 -- their levels are to yours; the given order (the fullest first) breaks ties.
-local function ForYou(rows)
+local function OrderZones(rows)
     local here = D.PlayerZone()
     local map = here and C_Map.GetMapInfo(here)
     local continent = map and map.parentMapID
@@ -42,7 +42,8 @@ local function ForYou(rows)
     for i, row in ipairs(rows) do
         at[row] = i
         local zone = C_Map.GetMapInfo(row.zoneID)
-        local gap = row.low and (level < row.low and row.low - level or level > row.high and level - row.high or 0) or 30
+        local gap = row.low
+            and (level < row.low and row.low - level or level > row.high and level - row.high or 0) or 30
         score[row] = (row.zoneID == here and 0 or 1000) + (zone and zone.parentMapID == continent and 0 or 100) + gap
     end
     table.sort(rows, function(a, b)
@@ -52,7 +53,8 @@ local function ForYou(rows)
     return rows
 end
 
--- "Gathered in": zones with the most nodes of an ore or herb (D.Gathering), ordered by ForYou, with the skill it needs
+-- "Gathered in": zones with the most nodes of an ore or herb (D.Gathering), in OrderZones' order, with the
+-- skill it needs
 ns.RegisterLink({
     key = "gatheredIn",
     label = L["Gathered in"],
@@ -60,14 +62,14 @@ ns.RegisterLink({
     icon = "Interface\\Icons\\INV_Misc_Map_01",
     entries = function(entry)
         local list = {}
-        local gathering = entry.itemID and D.Gathering and D.Gathering(entry.itemID)
+        local gathering = entry.itemID and D.Gathering(entry.itemID)
         if not gathering or not (gathering.kind == "mine" or gathering.kind == "herb") then return list end
         local skill = (gathering.kind == "mine" and L["Mining %d"] or L["Herbalism %d"]):format(gathering.skill or 1)
         for _, zoneID in ipairs(gathering.zones or {}) do
             local row = ZoneRow(zoneID, skill)
             if row then list[#list + 1] = row end
         end
-        return ForYou(list)
+        return OrderZones(list)
     end,
 })
 
@@ -94,6 +96,7 @@ ns.RegisterLink({
     end,
 })
 
+-- "Teaches" of a recipe item: the recipe it teaches (straight to it)
 ns.RegisterLink({
     key = "teaches",
     label = L["Teaches"],
@@ -101,17 +104,15 @@ ns.RegisterLink({
     icon = "Interface\\Icons\\INV_Scroll_03",
     direct = true,
     entries = function(entry)
+        local list = {}
         local recipe = entry.itemID and D.RecipeOfItem(entry.itemID)
-        return recipe and { LinkedEntry(recipe, "") } or {}
+        if recipe then list[1] = LinkedEntry(recipe, "") end
+        return list
     end,
 })
 
 -- "Teaches" of a trainer: what it teaches you, learnable now first, then by the level or skill it needs
 -- (your class's spells, or trainer recipes of your professions; not what you know)
-local function Needs(entry)
-    if entry.trainLevel then return D.TrainingLevel and D.TrainingLevel(entry.spellID) or entry.trainLevel end
-    return entry.learn or entry.skill or 0
-end
 ns.RegisterLink({
     key = "trainerTeaches",
     label = L["Teaches"],
@@ -122,22 +123,12 @@ ns.RegisterLink({
         local teaches = entry.npcID and D.npcTrainers and D.npcTrainers[entry.npcID]
         if not teaches then return list end
         local found = {}
-        if teaches < 100 then
-            if teaches ~= select(3, UnitClass("player")) then return list end
-            for _, spell in ipairs(D.Entries("spells")) do
-                if spell.hidden and spell.trainLevel then found[#found + 1] = spell end
-            end
-        elseif D.ProfessionRanks()[teaches] then
-            for _, recipe in ipairs(D.Entries("professions")) do
-                if recipe.hidden and recipe.skillLine == teaches and (recipe.recipeItem or 0) == 0 then
-                    found[#found + 1] = recipe
-                end
-            end
-        end
+        for i, e in ipairs(ns.TrainerTeaches(teaches) or {}) do found[i] = e end -- (the list is shared; sorted here)
         for _, e in ipairs(found) do now[e] = D.LearnableNow(e) end
         table.sort(found, function(a, b)
             if now[a] ~= now[b] then return now[a] end
-            if Needs(a) ~= Needs(b) then return Needs(a) < Needs(b) end
+            local na, nb = ns.LearnNeeds(a), ns.LearnNeeds(b)
+            if na ~= nb then return na < nb end
             return a.key < b.key
         end)
         for _, e in ipairs(found) do list[#list + 1] = LinkedEntry(e, "") end
@@ -145,6 +136,7 @@ ns.RegisterLink({
     end,
 })
 
+-- "Ranks": the ranks of a spell, lowest first (only a spell with more than one)
 ns.RegisterLink({
     key = "ranks",
     label = L["Ranks"],
@@ -188,8 +180,8 @@ ns.RegisterLink({
     end,
 })
 
--- "Loot": what a dungeon's bosses drop, upgrades for you first, then the
--- better quality, then A-Z; the boss and its chance below on the right
+-- "Loot": what a dungeon's bosses drop, upgrades for you first, then the better quality, then A-Z; the
+-- boss and its chance below on the right
 ns.RegisterLink({
     key = "dungeonLoot",
     label = L["Loot"],
@@ -220,6 +212,7 @@ ns.RegisterLink({
     end,
 })
 
+-- "Quests" of a dungeon: those you can take first, then by level
 ns.RegisterLink({
     key = "dungeonQuests",
     label = L["Quests"],

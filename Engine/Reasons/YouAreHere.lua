@@ -5,7 +5,7 @@ local L = ns.L
 -- You are here (knowing): the dungeon or raid you are in. Its bosses, quests and drops are what you look up inside.
 -- The instance's map ID from the client (GetInstanceInfo), the same as the dungeons' entries (entry.mapID).
 
-local mapID -- the instance you are in; per search
+local mapID -- the instance you are in; see prepare
 
 local function Here()
     if not IsInInstance() then return nil end

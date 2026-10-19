@@ -1,10 +1,10 @@
 local ns = select(2, ...).search
 
--- The search's memory: what you chose after typing what (PylosCompassDB.learned); Rank.lua
--- scores it. learned: text -> entry ID -> { value, time, exact }. The text is each prefix of what
--- was typed (up to 12 characters); exact = 1 under the whole text (only such a choice may pass an
--- exact name in Rank.lua); "" counts every choice, also without text. A choice adds 1, opening
--- only its detail view 0.5; values halve every two weeks.
+-- The search's memory: what you chose after typing what (PylosCompassDB.learned); Rank.lua scores it.
+-- learned: text -> entry ID -> { value, time, exact }. The text is each prefix of what was typed (up to
+-- 12 characters); exact = 1 under the whole text (only such a choice may pass an exact name in Rank.lua);
+-- "" counts every choice, also without text. A choice adds 1, opening only its detail view 0.5; values
+-- halve every two weeks.
 
 local EachChar = ns.EachChar
 local memory = {}
@@ -13,9 +13,9 @@ ns.memory = memory
 local HALF_LIFE = 14 * 86400   -- seconds
 local MAX_LEARNED_LENGTH = 12
 local FORGOTTEN = 0.05         -- values below are dropped at login
-local USED_CHOSEN = 0.5        -- "used" without the recommendations: chosen only (its share there)
+local USED_CHOSEN = 0.5        -- the share of "chosen" in the engine's "used" (Engine\Memory.lua)
 
--- an ID is kept only if this says yes (set in Search\Spotlight.lua); nil: every ID
+-- an ID is kept only if this says yes (set in Control.lua); nil: every ID
 memory.accept = nil
 
 local function DB() return ns.db end
@@ -41,7 +41,7 @@ local function LearnKey(text)
 end
 
 -- remembers a choice after typing text (may be empty); amount 1 for a choice, 0.5 for only looking
-function memory.Chose(id, text, amount)
+function memory.Chose(id, amount, text)
     local db = DB()
     if not db or not id or (memory.accept and not memory.accept(id)) then return end
     local learned, now = db.learned, time()
@@ -84,7 +84,7 @@ function memory.EachLearned(text, add)
     for id in pairs(bucket) do add(id) end
 end
 
--- how much an entry is chosen at all, 0..1 (scaled like the recommendations' "used", which counts more)
+-- how much an entry is chosen at all, 0..USED_CHOSEN (scaled like the engine's "used", which counts more)
 function memory.UsedNow()
     local db = DB()
     local all = db and db.learned[""]
@@ -137,10 +137,17 @@ function memory.Prune()
     local db = DB()
     if not db then return end
     local now = time()
+    local texts = {} -- { text, its strongest record's value }
     for key, bucket in pairs(db.learned) do
-        local ids = {}
+        local ids, top = {}, 0
         for id, record in pairs(bucket) do
-            if Value(record, now) < FORGOTTEN then bucket[id] = nil else ids[#ids + 1] = id end
+            local value = Value(record, now)
+            if value < FORGOTTEN then
+                bucket[id] = nil
+            else
+                ids[#ids + 1] = id
+                if value > top then top = value end
+            end
         end
         local limit = key == "" and MAX_FOR_ALL or MAX_PER_TEXT
         if #ids > limit then
@@ -151,6 +158,13 @@ function memory.Prune()
             end)
             for i = limit + 1, #ids do bucket[ids[i]] = nil end
         end
-        if next(bucket) == nil then db.learned[key] = nil end
+        if next(bucket) == nil then db.learned[key] = nil elseif key ~= "" then texts[#texts + 1] = { key, top } end
+    end
+    if #texts > MAX_TEXTS then
+        table.sort(texts, function(a, b)
+            if a[2] ~= b[2] then return a[2] > b[2] end
+            return a[1] < b[1]
+        end)
+        for i = MAX_TEXTS + 1, #texts do db.learned[texts[i][1]] = nil end
     end
 end

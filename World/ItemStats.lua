@@ -12,7 +12,7 @@ if D.off then return end
 -- Keys. Ratings are percent points at level 60 as the tooltip shows them ("+1.0%" = 1);
 -- Forever's hit and crit work for spells too, so "+1% hit" gives HIT = 1 and SPELLHIT = 1.
 --   STR AGI STA INT SPI     primary stats
---   ARMOR                   base plus bonus armour
+--   ARMOR                   base plus bonus armor
 --   DEF DODGE PARRY BLOCK BLOCKVALUE  defense skill points; dodge, parry, block %; block value
 --   HIT CRIT                melee and ranged hit / crit %
 --   SPELLHIT SPELLCRIT      spell hit / crit %
@@ -53,18 +53,20 @@ function D.ItemStats(itemID)
 end
 
 -- Live stats
--- C_Item.GetItemStats names -> keys above. Shared with gen_itemstats.lua (which strips
--- ITEM_MOD_ and _SHORT and converts ratings itself) so a worn item and the same item from the
--- data are valued alike. Ratings are taken as the game gives them.
+-- C_Item.GetItemStats names -> keys above. The data generator uses the same names (it strips ITEM_MOD_ and _SHORT and
+-- converts ratings itself), so a worn item and the same item from the data are valued alike. Ratings are taken as
+-- the game gives them.
 D.LIVE_STAT_KEYS = {
     ITEM_MOD_STRENGTH_SHORT = "STR", ITEM_MOD_AGILITY_SHORT = "AGI", ITEM_MOD_STAMINA_SHORT = "STA",
     ITEM_MOD_INTELLECT_SHORT = "INT", ITEM_MOD_SPIRIT_SHORT = "SPI", RESISTANCE0_NAME = "ARMOR",
     ITEM_MOD_DEFENSE_SKILL_RATING_SHORT = "DEF", ITEM_MOD_DODGE_RATING_SHORT = "DODGE",
-    ITEM_MOD_PARRY_RATING_SHORT = "PARRY", ITEM_MOD_BLOCK_RATING_SHORT = "BLOCK", ITEM_MOD_BLOCK_VALUE_SHORT = "BLOCKVALUE",
+    ITEM_MOD_PARRY_RATING_SHORT = "PARRY", ITEM_MOD_BLOCK_RATING_SHORT = "BLOCK",
+    ITEM_MOD_BLOCK_VALUE_SHORT = "BLOCKVALUE",
     ITEM_MOD_HIT_RATING_SHORT = "HIT", ITEM_MOD_CRIT_RATING_SHORT = "CRIT",
     ITEM_MOD_HIT_SPELL_RATING_SHORT = "SPELLHIT", ITEM_MOD_CRIT_SPELL_RATING_SHORT = "SPELLCRIT",
     ITEM_MOD_ATTACK_POWER_SHORT = "AP", ITEM_MOD_RANGED_ATTACK_POWER_SHORT = "RAP",
-    ITEM_MOD_SPELL_POWER_SHORT = "SP", ITEM_MOD_SPELL_DAMAGE_DONE_SHORT = "SPDMG", ITEM_MOD_SPELL_HEALING_DONE_SHORT = "HEAL",
+    ITEM_MOD_SPELL_POWER_SHORT = "SP", ITEM_MOD_SPELL_DAMAGE_DONE_SHORT = "SPDMG",
+    ITEM_MOD_SPELL_HEALING_DONE_SHORT = "HEAL",
     ITEM_MOD_HOLY_DAMAGE_DONE_SHORT = "SP_HOLY", ITEM_MOD_FIRE_DAMAGE_DONE_SHORT = "SP_FIRE",
     ITEM_MOD_NATURE_DAMAGE_DONE_SHORT = "SP_NATURE", ITEM_MOD_FROST_DAMAGE_DONE_SHORT = "SP_FROST",
     ITEM_MOD_SHADOW_DAMAGE_DONE_SHORT = "SP_SHADOW", ITEM_MOD_ARCANE_DAMAGE_DONE_SHORT = "SP_ARCANE",
@@ -77,21 +79,28 @@ D.LIVE_STAT_KEYS = {
     ITEM_MOD_TWOHANDED_SWORDS_SHORT = "SKILL_2H_SWORDS", ITEM_MOD_AXES_SHORT = "SKILL_AXES",
     ITEM_MOD_BOWS_SHORT = "SKILL_BOWS", ITEM_MOD_CROSSBOWS_SHORT = "SKILL_CROSSBOWS",
     ITEM_MOD_DAGGERS_SHORT = "SKILL_DAGGERS", ITEM_MOD_DUAL_WIELD_SHORT = "SKILL_DUAL_WIELD",
-    ITEM_MOD_FIST_WEAPONS_SHORT = "SKILL_FIST", ITEM_MOD_GUNS_SHORT = "SKILL_GUNS", ITEM_MOD_MACES_SHORT = "SKILL_MACES",
+    ITEM_MOD_FIST_WEAPONS_SHORT = "SKILL_FIST", ITEM_MOD_GUNS_SHORT = "SKILL_GUNS",
+    ITEM_MOD_MACES_SHORT = "SKILL_MACES",
     ITEM_MOD_POLEARMS_SHORT = "SKILL_POLEARMS", ITEM_MOD_STAVES_SHORT = "SKILL_STAVES",
-    ITEM_MOD_SWORDS_SHORT = "SKILL_SWORDS", ITEM_MOD_THROWN_SHORT = "SKILL_THROWN", ITEM_MOD_WANDS_SHORT = "SKILL_WANDS",
+    ITEM_MOD_SWORDS_SHORT = "SKILL_SWORDS", ITEM_MOD_THROWN_SHORT = "SKILL_THROWN",
+    ITEM_MOD_WANDS_SHORT = "SKILL_WANDS",
 }
+
+local ALIASED = { MP5 = true, HP5 = true }
 
 -- Stats of an item link from the game (also random "of the X" items), keyed as D.ItemStats:
 -- { stats, dps }; nil if the client does not know the item yet
 function D.LiveItemStats(link)
-    if not (link and C_Item.GetItemStats) then return nil end
+    if not link then return nil end
     local raw = C_Item.GetItemStats(link)
     if not raw then return nil end
     local stats = {}
     for name, amount in pairs(raw) do
         local key = D.LIVE_STAT_KEYS[name]
-        if key then stats[key] = (stats[key] or 0) + amount end
+        if key then
+            -- MP5 and HP5 have two client names each: one stat, not two
+            stats[key] = ALIASED[key] and math.max(stats[key] or 0, amount) or (stats[key] or 0) + amount
+        end
     end
     local result = { stats = stats }
     local dps = raw.ITEM_MOD_DAMAGE_PER_SECOND_SHORT

@@ -3,14 +3,19 @@ local D = ns.data
 local L = ns.L
 local W = ns.widgets -- shared with the search window
 
--- Suggestions window (minimap middle click or key), built from the widgets shared with the search (Widgets.lua).
---   tabs: one per topic (Reasons.lua), always one set (no all-in-one list: what is important now comes as a nudge, Push.lua). Each counts its suggestions; empty ones are dimmed; close tab at the right end.
+-- Recommendations window (minimap middle click or key), built from the widgets shared with the search (Widgets.lua).
+--   tabs: one per topic (Reasons.lua), always one set (no all-in-one list: what is important now comes as a nudge,
+--   Push.lua). Each counts its suggestions; empty ones are dimmed; close tab at the right end.
 --   subtopics: side tabs (Subtopics.lua, W.SideTabs); the set one narrows the list, clicking it again clears it.
---   list: best first (ns.RelevantByTopic); row = icon, name, category, strongest reason's note (text, or symbol with count). Hover shows the game's tooltip with every reason beside the window.
---   click: uses/equips an item, casts a spell, opens a recipe's profession window (secure: left click, out of combat), sets a waypoint, or (Quests tab) opens the quest in the quest log.
+--   list: best first (ns.RelevantByTopic); row = icon, name, category, strongest reason's note (text, or symbol with
+--   count). Hover shows the game's tooltip with every reason beside the window.
+--   click: uses/equips an item, casts a spell, opens a recipe's profession window (secure: left click, out of
+--   combat), sets a waypoint, or (Quests tab) opens the quest in the quest log.
 --   right click: the search's menu (quest log, search, waypoint, good/bad/don't suggest).
--- Draggable (rows too), anchored at its top left so a shorter list shrinks upwards. Updates on open and soon after changes (events, no timer), not while the mouse is over it.
--- Animation as the search's; rows do not slide in (they change on each update). Closes before combat: secure buttons cannot change in combat.
+-- Draggable (rows too), anchored at its top left so a shorter list shrinks upwards. Updates on open and soon after
+-- changes (events, no timer), not while the mouse is over it.
+-- Animation as the search's; rows do not slide in (they change on each update). Closes before combat: secure
+-- buttons cannot change in combat.
 
 local ROWS = 10
 local ALL = 999           -- a topic's list in full (its tab counts it)
@@ -25,8 +30,8 @@ local BACKGROUND = 0.85   -- opacity when the search window's is not there
 local TOOLTIP_WAIT = W.TOOLTIP_WAIT
 local NONE = {}
 
--- tabs: one per topic in Reasons.lua's TOPICS order. Symbol: an icon (file ID or path), optionally a part of a file (micro menu symbols);
--- same symbols as the search's category tabs. A topic without one gets a question mark.
+-- tabs: one per topic in Reasons.lua's TOPICS order. Symbol: an icon (file ID or path), optionally a part of a file
+-- (micro menu symbols); same symbols as the search's category tabs. A topic without one gets a question mark.
 local SYMBOLS = {
     class = {},                                     -- your class's symbol
     gear = { icon = 132627 },                       -- INV_Chest_Chain_05
@@ -54,11 +59,11 @@ local function Background()
 end
 
 -- What a click does
--- kind ("item", "spell": secure; "waypoint"), its value, the tooltip's words
+-- kind ("item", "spell": secure; "quest", "waypoint", "map"), its value, the tooltip's words
 
--- opens a quest of the log; Forever's quest log is the world map's (QuestMapFrame_OpenToQuestDetails, Blizzard_UIPanels_Game)
+-- opens a quest of the log (the search's rule, Search\UI\Menu.lua)
 local function OpenQuest(questID)
-    if QuestMapFrame_OpenToQuestDetails and C_QuestLog.IsOnQuest(questID) then
+    if D.search.QuestInLog(questID) then
         QuestMapFrame_OpenToQuestDetails(questID)
     else
         W.Error(L["This quest is not in your quest log."])
@@ -78,16 +83,17 @@ local function Action(entry)
     if itemID and C_Item.GetItemCount(itemID) > 0 then
         if entry.itemClass == 2 or entry.itemClass == 4 then return "item", "item:" .. itemID, L["Click: put it on"] end
         local GetSpell = C_Item.GetItemSpell
-        if entry.itemClass == 9 or (GetSpell and GetSpell(itemID)) then return "item", "item:" .. itemID, L["Click: use it"] end
+        if entry.itemClass == 9 or (GetSpell and GetSpell(itemID)) then
+            return "item", "item:" .. itemID, L["Click: use it"]
+        end
     end
     if entry.domain == "spells" and not entry.hidden and entry.spellID and not D.SpellPassive(entry.spellID) then
         return "spell", entry.spellID, L["Click: cast it"]
     end
-    -- recipe, or item made by one of your recipes: its profession window (casting the recipe does nothing without it open)
-    -- (not "x and f()": "and" keeps only the first of the two results)
+    -- recipe, or item made by one of your recipes: its profession window (casting the recipe does nothing
+    -- without it open)
     if entry.domain == "professions" or (itemID and entry.domain == "items") then
-        local recipeID, skillLine = D.CraftingRecipe(entry)
-        local spell = recipeID and D.ProfessionWindowSpell(skillLine)
+        local spell = D.search.ProfessionWindow(entry)
         if spell then return "spell", spell, L["Click: open %s"]:format(spell) end
     end
     if entry.place and C_Map and C_Map.SetUserWaypoint and UiMapPoint then
@@ -101,13 +107,14 @@ end
 -- Own tooltip beside the list as the search's (GameTooltip would add the equipped-item comparison, covering the list)
 
 local tip = CreateFrame("GameTooltip", "PylosCompassWindowTooltip", UIParent, "GameTooltipTemplate")
--- Pylos Item Upgrades skips this tooltip (it already has the "Why" lines)
+-- Item-tooltip addons that honour this flag skip the tooltip (it already has the "Why" lines)
 tip.noUpgradeLines = true
 tip:SetFrameStrata("TOOLTIP")
 
--- Gear: with the compare key held (IsModifiedClick "COMPAREITEMS") show what you wear beside it (GameTooltip_ShowCompareItem, Blizzard_GameTooltip).
--- The comparison needs tooltip.shoppingTooltips, which only the GameTooltip gets at load (nil was a Lua error in game): ours borrows the game's two,
--- as only one tooltip shows at a time.
+-- Gear: with the compare key held (IsModifiedClick "COMPAREITEMS") show what you wear beside it
+-- (GameTooltip_ShowCompareItem, Blizzard_GameTooltip). The comparison needs tooltip.shoppingTooltips, which only the
+-- GameTooltip gets at load (a nil there is a Lua error in the game): ours borrows the game's two, as only one
+-- tooltip shows at a time.
 if ShoppingTooltip1 and ShoppingTooltip2 then tip.shoppingTooltips = { ShoppingTooltip1, ShoppingTooltip2 } end
 
 local function Compare(entry)
@@ -115,14 +122,15 @@ local function Compare(entry)
     local gear = entry.itemID and (entry.itemClass == 2 or entry.itemClass == 4)
     if gear and IsModifiedClick and IsModifiedClick("COMPAREITEMS") and GameTooltip_ShowCompareItem then
         GameTooltip_ShowCompareItem(tip, tip)
-    elseif tip.shoppingTooltips and GameTooltip_HideShoppingTooltips then
+    elseif GameTooltip_HideShoppingTooltips then
         GameTooltip_HideShoppingTooltips(tip)
     end
 end
 
 local hovered -- the row the mouse is over (its tooltip follows the compare key)
 
--- row whose tooltip waits for its item's data, and since when (unloaded items showed "Retrieving item information")
+-- row whose tooltip waits for its item's data, and since when (an unloaded item's tooltip would say "Retrieving
+-- item information")
 local waiting, waitingSince
 
 local function Tooltip(row, waited)
@@ -154,7 +162,8 @@ local function Tooltip(row, waited)
             tip:AddLine(entry.category, W.SUB[1], W.SUB[2], W.SUB[3])
         end
     end
-    -- why (incl. what the row carries), a quest's still-to-do and the click text: format shared with the search (Widgets.lua)
+    -- why (incl. what the row carries), a quest's still-to-do and the click text: format shared with the search
+    -- (Widgets.lua)
     local why = ns.Explain(entry)
     for _, carried in ipairs(item.carries or NONE) do
         local note = ns.reasons.NoteText(ns.Note(carried))
@@ -178,11 +187,12 @@ local function Mark(row, on)
     W.MarkRow(row, on, entry and entry.hidden == true)
 end
 
--- Right-click menu, the search's wording and order: quest log first (own quest, or the quest an item/NPC is needed for), entry and quest in the search (service "spotlight"), waypoint, then your rating.
+-- Right-click menu, the search's wording and order: quest log first (own quest, or the quest an item/NPC is needed
+-- for), entry and quest in the search, waypoint, then your rating.
 local function Menu(row)
     local entry = row.item and row.item.entry
     if not entry then return end
-    local SYMBOLS = W.SYMBOLS
+    local ICONS = W.SYMBOLS
     local own = entry.domain == "quests" -- the row is the quest itself
     local questID, title
     if own then questID, title = entry.questID, entry.name else questID, title = ns.QuestNeedOf(entry) end
@@ -195,30 +205,30 @@ local function Menu(row)
     local look, act, rate = {}, {}, {}
     if questID then
         look[#look + 1] = { own and L["Open in quest log"] or L["Open %s in quest log"]:format(title),
-            function() OpenQuest(questID) end, icon = SYMBOLS.questLog }
+            function() OpenQuest(questID) end, icon = ICONS.questLog }
     end
     if ns.db.searchOn ~= false then
         look[#look + 1] = { L["Search"], function() D.search.Show(D.EntryID(entry), entry.name) end,
-            icon = SYMBOLS.details }
+            icon = ICONS.details }
         if questID and not own then
             look[#look + 1] = { L["Find the quest in the search"], function() D.search.Show("q:" .. questID, title) end,
-                icon = SYMBOLS.details }
+                icon = ICONS.details }
         end
     end
     if look[1] then look[1].main = true end
     if entry.place and C_Map.SetUserWaypoint and UiMapPoint then
-        act[#act + 1] = { L["Set waypoint"], function() W.Waypoint(entry.name, entry.place) end, icon = SYMBOLS.waypoint }
+        act[#act + 1] = { L["Set waypoint"], function() W.Waypoint(entry.name, entry.place) end, icon = ICONS.waypoint }
     end
     -- rating, confirmed at the top of the screen as in the search
-    rate[1] = { SYMBOLS.good, L["Good suggestion"], Then(function()
+    rate[1] = { ICONS.good, L["Good suggestion"], Then(function()
         ns.Feedback(entry, true)
         W.Notice(L["Noted: suggestions like this count more for you."])
     end) }
-    rate[2] = { SYMBOLS.bad, L["Bad suggestion"], Then(function()
+    rate[2] = { ICONS.bad, L["Bad suggestion"], Then(function()
         ns.Feedback(entry, false)
         W.Notice(L["Noted: suggestions like this count less for you."])
     end) }
-    rate[3] = { SYMBOLS.hide, L["Don't suggest"], Then(function() ns.Hide(entry) end) }
+    rate[3] = { ICONS.hide, L["Don't suggest"], Then(function() ns.Hide(entry) end) }
     window.menu.Open({ look, act }, nil, rate)
 end
 
@@ -262,7 +272,8 @@ local function Row(list, i)
         if down or not row.item then return end
         if button == "RightButton" then return Menu(row) end
         if button ~= "LeftButton" then return end
-        -- not noted as chosen: that counts as done and the row stepped back at once; real actions are noted by the memory (Memory.lua Did)
+        -- not noted as chosen: that counts as done and the row stepped back at once; real actions are noted by the
+        -- memory (Memory.lua Did)
         if row.kind == "waypoint" then W.Waypoint(row.item.entry.name, row.value) end
         if row.kind == "quest" then OpenQuest(row.value) end
         if row.kind == "map" then OpenMap(row.value) end
@@ -285,7 +296,7 @@ local function Describe(entry)
     end
     -- a zone: its continent and the levels of most of its quests
     if entry.domain == "zones" then
-        local low, high = ns.data.ZoneLevels(entry.zoneID)
+        local low, high = D.ZoneLevels(entry.zoneID)
         local levels = low and (low < high and L["Level %d-%d"]:format(low, high) or L["Level %d"]:format(low))
         return table.concat({ entry.category or "", levels }, DOT)
     end
@@ -310,7 +321,9 @@ local function Fill(row, item, rank)
     -- shown to you: Learning watches whether you follow it (only what you saw counts), also what the row carries
     ns.Shown(entry, nil, rank)
     for _, carried in ipairs(item.carries or NONE) do ns.Shown(carried, nil, rank) end
-    if entry.itemID and not C_Item.IsItemDataCachedByID(entry.itemID) then C_Item.RequestLoadItemDataByID(entry.itemID) end
+    if entry.itemID and not C_Item.IsItemDataCachedByID(entry.itemID) then
+        C_Item.RequestLoadItemDataByID(entry.itemID)
+    end
     W.ShowIcon(row.icon, entry, nil, 134400)
     row.icon:SetDesaturated(entry.hidden == true)
     W.ShowQuality(row.quality, entry)
@@ -355,7 +368,8 @@ end
 
 -- Window
 
--- tabs in their row: the set one stands out; on open they rise from under the window in turn, the close tab last (Widgets.lua times). Returns whether they still move.
+-- tabs in their row: the set one stands out; on open they rise from under the window in turn, the close tab last
+-- (Widgets.lua times). Returns whether they still move.
 local function PlaceTabs(now)
     local since = now - (window.tabsAt or 0)
     for i, tab in ipairs(window.tabs) do
@@ -372,7 +386,8 @@ local function PlaceTabs(now)
     return ease < 1
 end
 
--- height follows the list (grows/shrinks downwards from the top); rows below the edge show as it reaches them. Returns whether it still moves.
+-- height follows the list (grows/shrinks downwards from the top); rows below the edge show as it reaches them.
+-- Returns whether it still moves.
 local function FollowHeight(elapsed)
     local target, height = window.targetHeight, window:GetHeight()
     local moving = math.abs(target - height) >= 0.5
@@ -489,7 +504,9 @@ local function Build()
         local tab = W.IconTab(tabs, TAB)
         tab.key = info.key
         local icon = info.icon
-        if info.key == "class" then icon = "Interface\\Icons\\ClassIcon_" .. (select(2, UnitClass("player")) or "WARRIOR") end
+        if info.key == "class" then
+            icon = "Interface\\Icons\\ClassIcon_" .. (select(2, UnitClass("player")) or "WARRIOR")
+        end
         W.ShowIcon(tab.icon, { iconPart = info.part, icon = icon })
         -- count on its own layer above the icon (hovered tabs show in full, W.IconTab)
         local top = CreateFrame("Frame", nil, tab)
@@ -546,7 +563,10 @@ local function Build()
     -- its hiding starts the fade. No parent: hiding the UI (Alt+Z) must not close the window.
     local escape = CreateFrame("Frame", "PylosCompassWindowEscape")
     escape:Hide()
-    tinsert(UISpecialFrames, "PylosCompassWindowEscape")
+    -- (a failed Build is tried again on the next toggle: listed once)
+    if not tContains(UISpecialFrames, "PylosCompassWindowEscape") then
+        tinsert(UISpecialFrames, "PylosCompassWindowEscape")
+    end
 
     -- called by Toast.lua QuietChanged
     function ns.WindowDots()
@@ -562,14 +582,18 @@ local function Build()
             ns.db.windowSub[topic] = nil
             if window:IsShown() then window.Update(true) end
         elseif not window:IsShown() and (not window.closedAt or time() - window.closedAt > AWAY) then
-            -- away a while (or first time this session): the tab whose best suggestion is worth most; back soon: where you were
+            -- away a while (or first time this session): the tab whose best suggestion is worth most; back soon:
+            -- where you were
             local best, bestScore = nil, 0
             local lists = ns.RelevantByTopic(ALL, PER_DOMAIN)
             for _, tab in ipairs(window.tabs) do
                 local top = (lists[tab.key] or NONE)[1]
                 if top and top.score > bestScore then best, bestScore = tab.key, top.score end
             end
-            if best then ns.db.windowTab = best end
+            if best then
+                ns.db.windowTab = best
+                ns.db.windowSub[best] = nil -- a narrowed list may not hold the row that made it the best tab
+            end
         end
         window.closingAt = nil
         local back = window:IsShown()
@@ -600,7 +624,8 @@ local function Build()
         if window:IsShown() and not window.closingAt then window.Close() end
     end)
 
-    -- updates: now (force), or SOON after a change, never while the mouse is over it (then once it leaves). No timer: recomputing every few seconds cost ~50 ms each.
+    -- updates: now (force), or SOON after a change, never while the mouse is over it (then once it leaves).
+    -- No timer: one recompute takes ~50 ms.
     local dueAt
     function window.Update(force)
         if not force and window:IsMouseOver() then return end
@@ -636,7 +661,8 @@ local function Build()
         end
         -- tooltip waiting for item data: shown when it arrives, or after TOOLTIP_WAIT with what there is
         if waiting and not waiting.item then waiting = nil end
-        if waiting and (C_Item.IsItemDataCachedByID(waiting.item.entry.itemID) or now - waitingSince >= TOOLTIP_WAIT) then
+        if waiting and (C_Item.IsItemDataCachedByID(waiting.item.entry.itemID)
+                or now - waitingSince >= TOOLTIP_WAIT) then
             local row = waiting
             if row:IsVisible() and row.secure:IsMouseOver() then Tooltip(row, true) else waiting = nil end
         end
@@ -655,7 +681,8 @@ local function Build()
     return window
 end
 
--- recompute soon after a state the suggestions depend on changes (Reasons.lua reasons.STATES; Data's State.lua batches to one call per frame)
+-- recompute soon after a state the suggestions depend on changes (Reasons.lua reasons.STATES; State.lua batches
+-- them to one call per frame)
 D.OnState(ns.reasons.STATES, function()
     if window and window:IsShown() then window.Soon() end
 end)
@@ -664,9 +691,14 @@ ns.On("PLAYER_REGEN_DISABLED", function()
     if window and window:IsShown() then window.Close(true) end
 end)
 
--- the minimap button's middle click and the key (Compass.lua)
+-- the minimap button's middle click and the key (Options.lua)
 function ns.ToggleWindow()
-    if not ns.db or ns.db.adviceOn == false then return end
+    if not ns.db then return end
+    if ns.db.adviceOn == false then
+        print(("|cffffd100Pylos Compass|r: %s"):format(
+            L["the recommendations are switched off (right-click the minimap button for the options)."]))
+        return
+    end
     if InCombatLockdown() then
         W.Error(L["The recommendations open after combat."])
         return

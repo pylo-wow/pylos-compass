@@ -2,12 +2,12 @@ local ns = select(2, ...).search
 local L = ns.L
 local D = ns.data
 
--- Quests: every quest of the game (Data's World\Quests.lua: the client's quest cache), searchable by
+-- Quests: every quest of the game (World\Quests.lua: the client's quest cache), searchable by
 -- name. Here only how they are shown:
 --   row      quest symbol (a dungeon's or raid's for those), grey once done; below the name its level,
 --            zone (or class, profession), the side if only one may take it, in your log or done
 --   tooltip  and detail view: what it asks for and gives, who gives and takes it (learned in play),
---            the quest after it (lines: Data's World\Lines.lua)
+--            the quest after it (lines: World\Lines.lua)
 --   links    (Links\Quests.lua) its objectives, rewards, giver, taker and next quest; for items and
 --            NPCs the quests they belong to
 -- Opened without text: your quest log (its filter set by itself); with no filter only the hint to
@@ -17,7 +17,7 @@ local D = ns.data
 -- WoW Forever's quest log symbol (the micro menu's exclamation mark): atlas ui-hud-micromenu-questlog-up-c60-2x
 -- is not known at run time, so its measured part of the file is used (UI\Kit\Widgets.lua)
 local QUEST_PART = ns.widgets.QUEST_PART
-local LEVEL_BELOW, LEVEL_ABOVE = 5, 3 -- "your level": quests this far below or above yours
+local LEVEL_BELOW, LEVEL_ABOVE = ns.LEVEL_BELOW, ns.LEVEL_ABOVE
 
 local function InLog(entry)
     return C_QuestLog.IsOnQuest(entry.questID) == true
@@ -26,7 +26,7 @@ local function Done(entry)
     return C_QuestLog.IsQuestFlaggedCompleted(entry.questID) == true
 end
 
--- row texts and tooltip lines: Data (World\Lines.lua), shared with the recommendations
+-- row texts and tooltip lines: World\Lines.lua, shared with the recommendations
 local Belongs = D.QuestBelongs
 
 -- line below the name: kind (elite, dungeon, raid, PvP; daily, weekly), where (zone or dungeon; class,
@@ -42,11 +42,11 @@ local function Describe(entry)
 end
 
 -- Row state (UI\List.lua): in your log (ready to turn in), done, not for you (side, race, class), the level
--- it may be taken at while above yours; else its level in the colour the quest log gives it
-local function RowState(entry)
+-- it may be taken at while above yours; else its level in the color the quest log gives it
+local function State(entry)
     local questID = entry.questID
     if C_QuestLog.IsOnQuest(questID) == true then
-        if C_QuestLog.IsComplete and C_QuestLog.IsComplete(questID) then return L["Ready"], "good" end
+        if C_QuestLog.IsComplete(questID) then return L["Ready"], "good" end
         return L["In your log"], "active"
     end
     if C_QuestLog.IsQuestFlaggedCompleted(questID) == true then return L["Done"], "done" end
@@ -71,9 +71,11 @@ local function DoneID(questID) return C_QuestLog.IsQuestFlaggedCompleted(questID
 local function ForYou(entry, add)
     local questID = entry.questID
     if C_QuestLog.IsOnQuest(questID) == true then
-        if C_QuestLog.IsComplete and C_QuestLog.IsComplete(questID) then add(L["Ready to turn in"], "good") end
-        for _, objective in ipairs(C_QuestLog.GetQuestObjectives and C_QuestLog.GetQuestObjectives(questID) or {}) do
-            if objective.text and objective.text ~= "" then add(objective.text, objective.finished and "good" or "active") end
+        if C_QuestLog.IsComplete(questID) then add(L["Ready to turn in"], "good") end
+        for _, objective in ipairs(C_QuestLog.GetQuestObjectives(questID) or {}) do
+            if objective.text and objective.text ~= "" then
+                add(objective.text, objective.finished and "good" or "active")
+            end
         end
         return
     end
@@ -91,7 +93,6 @@ local function ForYou(entry, add)
 end
 
 -- level and zone are read once per search (prepare), not per quest
-
 local level, grey, zone = 1, 0, nil -- yours, the highest grey quest level, your zone
 
 ns.RegisterFilter({
@@ -121,7 +122,7 @@ ns.RegisterFilter({
 })
 
 -- Your class's quests as a subcategory (tab). Known by the game's own sort (QuestSort: 376 of them); the few
--- old class quests sorted under a zone are not among them. Professions not: their sort is no sure sign.
+-- class quests sorted under a zone are not among them. Professions not: their sort is no sure sign.
 -- Only those your race may take (most class quests are open to every race).
 local playerClass = select(3, UnitClass("player"))
 ns.RegisterFilter({
@@ -175,7 +176,7 @@ ns.RegisterFilter({
 })
 
 -- Opened without text: with a filter ("In your log" is set by itself) every quest that passes, by level,
--- then A-Z; without one only the hint. The order is kept until Data rebuilds its quests.
+-- then A-Z; without one only the hint. The order is kept until the data layer rebuilds its quests.
 local sorted = D.Cache({ "data:quests" })
 local function ByLevel(a, b)
     if a.level ~= b.level then return a.level < b.level end
@@ -226,10 +227,10 @@ ns.RegisterSource({
     emptyHint = L["Type to search, or pick a filter."],
     icon = "Interface\\Icons\\INV_Misc_Book_08",
     iconPart = QUEST_PART,
+    defaultFilters = { "questsLog" }, -- opened: your quest log
     browse = Browse,
     browseFiltered = true, -- with a filter set too: the order by level stays
-    defaultFilters = { "questsLog" }, -- opened: your quest log
     describe = Describe,
-    state = RowState,
+    state = State,
     forYou = ForYou,
 })

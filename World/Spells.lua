@@ -1,59 +1,38 @@
 local _, D = ...
 
 -- Spells: active spell book spells, professions included, each once in its highest rank, plus
--- the trainer's not-yet-learned spells (hidden = true; hosts show them only on purpose).
--- Small: built at once behind the loading screen.
+-- the trainer's not-yet-learned spells (hidden = true; only filters such as "Available" show them).
+-- Built at once behind the loading screen.
+--   D.SpellBookTabs()  { { name, icon }, ... } as last read; shared list, do not change
+--   D.SpellKnown(spellID), D.SpellPassive(spellID), D.SpellLearnableNow(entry)
 
 local KEY = "spells"
 
--- The three talent trees of each class in the game's order (classic; GetSpecialization is nil
--- in Forever and the Paladin's third tree is Retribution, both seen in game).
--- Your tree: D.PlayerSpec (You\Character.lua).
-D.TALENT_TREES = {
-    WARRIOR = { "Arms", "Fury", "Protection" },
-    PALADIN = { "Holy", "Protection", "Retribution" },
-    HUNTER = { "Beast Mastery", "Marksmanship", "Survival" },
-    ROGUE = { "Assassination", "Combat", "Subtlety" },
-    PRIEST = { "Discipline", "Holy", "Shadow" },
-    SHAMAN = { "Elemental", "Enhancement", "Restoration" },
-    MAGE = { "Arcane", "Fire", "Frost" },
-    WARLOCK = { "Affliction", "Demonology", "Destruction" },
-    DRUID = { "Balance", "Feral Combat", "Restoration" },
-}
-
--- Spell book tabs (General, Holy, Protection, ...): { name, icon }, in book order; read with its spells
+-- Spell book tabs (General, Holy, Protection, ...) in book order, read with the spells
 local bookTabs = {}
 
--- Tabs as last read (with the spells: a build or a check); shared list, do not change
 function D.SpellBookTabs() return bookTabs end
 
-function D.SpellKnown(spellID)
-    return (IsPlayerSpell and IsPlayerSpell(spellID)) or (C_SpellBook and C_SpellBook.IsSpellKnown and C_SpellBook.IsSpellKnown(spellID))
-        or (IsSpellKnown ~= nil and IsSpellKnown(spellID))
-end
+function D.SpellKnown(spellID) return C_SpellBook.IsSpellKnown(spellID) end
 local Known = D.SpellKnown
 
-function D.SpellPassive(spellID)
-    if C_Spell.IsSpellPassive then return C_Spell.IsSpellPassive(spellID) end
-    return IsPassiveSpell ~= nil and IsPassiveSpell(spellID)
-end
+function D.SpellPassive(spellID) return C_Spell.IsSpellPassive(spellID) end
 
 local function SpellBookEntries(list)
-    if not (C_SpellBook and C_SpellBook.GetNumSpellBookSkillLines) then return end
     local meta = D.Meta(KEY)
     local bank, seen = Enum.SpellBookSpellBank.Player, {}
     wipe(bookTabs)
     for line = 1, C_SpellBook.GetNumSpellBookSkillLines() do
         local info = C_SpellBook.GetSpellBookSkillLineInfo(line)
         if info and not info.shouldHide then
-            -- first tab (General) shows the class icon, as in the game's spell book (the client
-            -- returns a book icon again)
+            -- first tab (General) shows the class icon, as the game's spell book does (the client
+            -- gives it a book icon)
             local icon = info.iconID
             if #bookTabs == 0 then icon = "Interface\\Icons\\ClassIcon_" .. select(2, UnitClass("player")) end
             bookTabs[#bookTabs + 1] = { name = info.name, icon = icon }
             for slot = info.itemIndexOffset + 1, info.itemIndexOffset + info.numSpellBookItems do
                 local item = C_SpellBook.GetSpellBookItemInfo(slot, bank)
-                local lowRank = C_SpellBook.IsSpellBookItemLowRank and C_SpellBook.IsSpellBookItemLowRank(slot, bank)
+                local lowRank = C_SpellBook.IsSpellBookItemLowRank(slot, bank)
                 if item and item.itemType == Enum.SpellBookItemType.Spell and item.spellID and not lowRank
                     and not item.isPassive and not item.isOffSpec and not seen[item.name] then
                     seen[item.name] = true
@@ -84,7 +63,7 @@ local function TrainerEntries(list)
     for i = 1, #data, 5 do
         local id, level, race = data[i], data[i + 1], data[i + 2]
         -- the level a trainer was seen to ask wins (World\LearnTrainers.lua)
-        level = D.TrainingLevel and D.TrainingLevel(id) or level
+        level = D.TrainingLevel(id) or level
         local name = C_Spell.GetSpellName(id)
         if name and (race == 0 or HasRace(race)) then
             -- spell book tab = its skill line's name
@@ -149,7 +128,7 @@ end
 -- before it is learned (a talent's later ranks need the talent)
 function D.SpellLearnableNow(entry)
     if not entry.hidden or not entry.trainLevel then return false end
-    local level = D.TrainingLevel and D.TrainingLevel(entry.spellID) or entry.trainLevel
+    local level = D.TrainingLevel(entry.spellID) or entry.trainLevel
     if level > UnitLevel("player") then return false end
     return entry.previousLearned and true or false
 end

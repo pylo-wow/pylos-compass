@@ -1,10 +1,8 @@
--- Pylos UI Kit 1.1.0 (copied from pylos-dev\shared; do not edit here)
 local _, ns = ...
 if ns.off then return end
 
--- Shared building blocks of Pylos addon windows: service "widgets" 1.1
--- (ns.widgets, set here; 1.1 added W.Window); look in STYLEGUIDE.md. Nothing addon-specific:
--- differences come in as parameters.
+-- Building blocks of Pylos addon windows: animation driver, tooltips, symbols, window frames, tabs, rows, context menu.
+-- Sets ns.widgets (W). Nothing addon-specific: differences come in as parameters.
 
 local L = ns.L
 local W = {}
@@ -16,9 +14,9 @@ function W.Clamp(x) return x < 0 and 0 or x > 1 and 1 or x end
 function W.EaseOutCubic(p) return 1 - (1 - p) ^ 3 end
 local Clamp, EaseOutCubic = W.Clamp, W.EaseOutCubic
 
--- Tokens: sizes and times both addons share (STYLEGUIDE.md)
+-- Tokens: sizes and times shared by the windows
 
-W.WIDTH = 460                -- search bar, suggestions window
+W.WIDTH = 460                -- search bar, recommendations window
 W.ROW_HEIGHT = 34
 W.NAME_X = 6 + W.ROW_HEIGHT + 6 -- where a row's name starts (RowParts)
 W.TAB_SIZE, W.TAB_GAP = 40, 8
@@ -32,19 +30,23 @@ W.FOLLOW = 16
 -- tabs rise from under the window one after another, the close tab last
 W.TAB_RISE, W.TAB_STAGGER = 8, 0.04
 W.CLOSE_TAB_TIME, W.CLOSE_TAB_DELAY = 0.22, 0.12
+W.TAB_OUT = 4                -- a set tab stands out this many px (placed by the addon)
+-- side tabs: px they slide under the window's frame; seconds to come out, one after another
+local SIDE_SLIDE = 26
+local SIDE_TIME, SIDE_STAGGER = 0.22, 0.045
 
--- Colours { r, g, b } (STYLEGUIDE.md)
+-- Colors { r, g, b }
 W.GOLD = { 1, 0.82, 0 }            -- marked, headings, notices
 W.WHITE = { 1, 1, 1 }              -- tooltip text, control lines
 W.LIGHT = { 0.88, 0.86, 0.8 }      -- names at rest
 W.SUB = { 0.6, 0.58, 0.52 }        -- the line of details, secondary text
-W.SOFT = { 0.8, 0.8, 0.8 }         -- secondary facts in a tooltip
+local SOFT = { 0.8, 0.8, 0.8 }     -- secondary facts in a tooltip
 W.DIM = { 0.55, 0.55, 0.55 }       -- dimmed names
 W.PLACEHOLDER = { 0.8, 0.8, 0.82 } -- empty lists, the search bar's hint
 W.GREEN = { 0.25, 1, 0.25 }        -- what a click does, upgrades, done
 W.RED = { 1, 0.3, 0.3 }            -- errors
 W.ORANGE = { 1, 0.5, 0.25 }        -- warnings, only for one side
-W.BLUE = { 0.6, 0.85, 1 }          -- places, people to go to
+local BLUE = { 0.6, 0.85, 1 }      -- places, people to go to
 W.BRONZE = { 0.62, 0.5, 0.3 }      -- thin lines: a frame (alpha 0.9), a rule (0.5)
 W.BRONZE_LINE, W.BRONZE_RULE = 0.9, 0.5
 local GOLD, WHITE, SUB = W.GOLD, W.WHITE, W.SUB
@@ -57,8 +59,7 @@ function W.Error(text) UIErrorsFrame:AddMessage(text, W.RED[1], W.RED[2], W.RED[
 function W.Notice(text) UIErrorsFrame:AddMessage(text, GOLD[1], GOLD[2], GOLD[3]) end
 
 -- Animation driver
--- All animations run on one hidden frame, shown only while something moves
--- (STYLEGUIDE.md section 10).
+-- All animations run on one hidden frame, shown only while something moves.
 --   W.Tween(frame, key, spec)  spec is read at once (reusable): duration (default
 --       FADE_TIME), delay, ease (default EaseOutCubic; false: linear),
 --       apply(frame, value): value 0-1 through the curve, once at the start (0,
@@ -130,7 +131,11 @@ driver:SetScript("OnUpdate", function(self, elapsed)
         if not record.dead then
             -- an error ends only this record and is reported; it must not repeat every frame
             local ok, err
-            if record.target then ok, err = pcall(StepFollow, record, elapsed) else ok, err = pcall(StepTween, record, now) end
+            if record.target then
+                ok, err = pcall(StepFollow, record, elapsed)
+            else
+                ok, err = pcall(StepTween, record, now)
+            end
             if not ok then
                 Remove(record)
                 geterrorhandler()(err)
@@ -182,7 +187,7 @@ function W.Follow(obj, field, target, apply, near)
     Add(follows, obj, field, f)
 end
 
--- Tooltips (STYLEGUIDE.md section 8). anchor: a SetOwner anchor ("ANCHOR_TOP") or
+-- Tooltips. anchor: a SetOwner anchor ("ANCHOR_TOP") or
 -- a point beside a window { point, frame, relativePoint, x, y }
 local function Own(tip, owner, anchor)
     if type(anchor) == "table" then
@@ -211,11 +216,10 @@ function W.FeatureTip(tip, owner, anchor, title, text, color)
     tip:Show()
 end
 
--- An entry's name and lines (lines from the data, World\Lines.lua: { text,
--- role, wrap }). An NPC's name takes the colour of its reaction to you, as in
--- the game. Returns whether there were lines.
+-- An entry's name and its lines { text, role, wrap } (role: a key of ROLE below, default white). An NPC's name takes
+-- the color of its reaction to you, as in the game. Returns whether there were lines.
 local REACTION = { { 1, 0.25, 0.2 }, { 1, 0.9, 0.2 }, { 0.3, 1, 0.3 } } -- hostile, neutral, friendly
-local ROLE = { white = WHITE, soft = W.SOFT, sub = SUB, gold = GOLD, blue = W.BLUE, orange = W.ORANGE,
+local ROLE = { white = WHITE, soft = SOFT, sub = SUB, gold = GOLD, blue = BLUE, orange = W.ORANGE,
     green = W.GREEN }
 function W.EntryText(tooltip, entry)
     local c = REACTION[entry.reaction or 0] or WHITE
@@ -240,9 +244,8 @@ function W.Atlas(texture, name)
 end
 local Atlas = W.Atlas
 
--- Part of a micro menu symbol shown: a square tight around it, shadow left out
--- (whole it was tiny). Measured in file 8200846 (wago.tools), in a symbol's
--- 64 x 82 pixels. Keyed by a word of the atlas name.
+-- Part of a micro menu symbol shown: a square tight around it, shadow left out. Measured in file 8200846 (wago.tools),
+-- in a symbol's 64 x 82 pixels. Keyed by a word of the atlas name.
 local ATLAS_CROPS = {
     spellbook = { 10.5 / 64, 50.5 / 64, 21.5 / 82, 61.5 / 82 },
     spectalents = { 13.5 / 64, 48.5 / 64, 23 / 82, 58 / 82 },
@@ -253,7 +256,7 @@ local ATLAS_CROPS = {
     -- quest log exclamation mark: x 23-40, y 14-67
     questlog = { 4.5 / 64, 58.5 / 64, 13.5 / 82, 67.5 / 82 },
 }
-function W.AtlasCrop(name)
+local function AtlasCrop(name)
     name = name:lower()
     for word, crop in pairs(ATLAS_CROPS) do
         if name:find(word, 1, true) then return crop end
@@ -272,8 +275,8 @@ W.EYE_PART = { 8200846, (133 + 14.5) / 1024, (133 + 47.5) / 1024, (421 + 24.5) /
 -- symbols, cut to their middle) or icon file with its painted border cut off.
 -- fallback: icon for a thing without one (else the texture stays empty)
 function W.ShowIcon(texture, thing, size, fallback)
-    -- an NPC with a model: its portrait, as the target frame draws it (if the client has the function)
-    if thing.displayID and SetPortraitTextureFromCreatureDisplayID then
+    -- an NPC with a model: its portrait, as the target frame draws it
+    if thing.displayID then
         SetPortraitTextureFromCreatureDisplayID(texture, thing.displayID)
         texture:SetTexCoord(0, 1, 0, 1)
         if size then texture:SetSize(size, size) end
@@ -291,7 +294,7 @@ function W.ShowIcon(texture, thing, size, fallback)
     end
     local info = thing.iconAtlas and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(thing.iconAtlas)
     if info and info.file then
-        local crop = W.AtlasCrop(thing.iconAtlas)
+        local crop = AtlasCrop(thing.iconAtlas)
         local left, right = info.leftTexCoord, info.rightTexCoord
         local top, bottom = info.topTexCoord, info.bottomTexCoord
         texture:SetTexture(info.file)
@@ -307,7 +310,7 @@ end
 
 -- a text's full width, also where it is cut off
 function W.TextWidth(fontString)
-    return fontString.GetUnboundedStringWidth and fontString:GetUnboundedStringWidth() or fontString:GetStringWidth()
+    return fontString:GetUnboundedStringWidth()
 end
 
 -- Windows
@@ -440,7 +443,6 @@ end
 -- Tabs
 -- Bronze window frame, glow when set, icon without the action button frame. The
 -- set one stands out TAB_OUT px (placed by the addon).
-W.TAB_OUT = 4
 
 function W.IconTab(parent, size)
     local button = CreateFrame("Button", nil, parent)
@@ -449,12 +451,14 @@ function W.IconTab(parent, size)
     button.glow = button:CreateTexture(nil, "BACKGROUND", nil, 1)
     button.glow:SetPoint("TOPLEFT", 3, -3)
     button.glow:SetPoint("BOTTOMRIGHT", -3, 3)
-    if not Atlas(button.glow, "Options_List_Active") then button.glow:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 0.2) end
+    if not Atlas(button.glow, "Options_List_Active") then
+        button.glow:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 0.2)
+    end
     button.icon = button:CreateTexture(nil, "ARTWORK")
     button.icon:SetSize(size - 14, size - 14)
     button.icon:SetPoint("CENTER")
     button.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    -- hovered, a dimmed tab shows its icon whole: the same icon in full colour in
+    -- hovered, a dimmed tab shows its icon whole: the same icon in full color in
     -- the HIGHLIGHT layer (no script: addons set the tabs' own). Copied by LightTab.
     button.hover = button:CreateTexture(nil, "HIGHLIGHT")
     button.hover:SetAllPoints(button.icon)
@@ -479,7 +483,7 @@ function W.LightTab(button, on, empty)
     end
 end
 
--- Close tab: the game's red × in a tab frame, dimmed like an unset tab, red when
+-- Close tab: the game's red cross in a tab frame, dimmed like an unset tab, red when
 -- hovered. Placed by the addon at the right end of the row, TAB_INSET from the
 -- window's right edge.
 function W.CloseTab(parent, size, tooltip, onClick)
@@ -510,9 +514,6 @@ end
 --   side.Show(list, set)   list: { { key, name, icon }, ... }; set: the one lit
 --   side.Place()           the window's height changed
 --   side.height            window height the shown tabs need (0: none)
-W.SIDE_SLIDE = 26                          -- px under the window's frame
-W.SIDE_TIME, W.SIDE_STAGGER = 0.22, 0.045  -- seconds to come out, one after another
-
 function W.SideTabs(parent, options)
     local SIZE, GAP, OUT = W.TAB_SIZE, W.TAB_GAP, W.TAB_OUT
     local side = { height = 0 }
@@ -539,7 +540,7 @@ function W.SideTabs(parent, options)
     local function PlaceTab(tab)
         local room, out = options.room(), tab.out
         tab:ClearAllPoints()
-        tab:SetPoint("TOPRIGHT", (tab.on and -OUT or 0) * out + W.SIDE_SLIDE * (1 - out), -tab.top)
+        tab:SetPoint("TOPRIGHT", (tab.on and -OUT or 0) * out + SIDE_SLIDE * (1 - out), -tab.top)
         tab:SetAlpha(out * W.Clamp((room - tab.top) / SIZE))
     end
     function side.Place()
@@ -552,7 +553,7 @@ function W.SideTabs(parent, options)
         tab.out = value
         PlaceTab(tab)
     end
-    local coming = { duration = W.SIDE_TIME, apply = Out }
+    local coming = { duration = SIDE_TIME, apply = Out }
 
     local function Apply(list, set)
         for i, item in ipairs(list) do
@@ -568,7 +569,7 @@ function W.SideTabs(parent, options)
     local function ComeOut()
         for i, tab in ipairs(tabs) do
             if tab:IsShown() then
-                coming.delay = (i - 1) * W.SIDE_STAGGER
+                coming.delay = (i - 1) * SIDE_STAGGER
                 W.Tween(tab, "out", coming)
             end
         end
@@ -618,14 +619,13 @@ function W.SideTabs(parent, options)
         side.which = shown > 0 and which or nil
         -- same gap (TAB_INSET) below the last tab as above the first
         side.height = shown > 0 and shown * (SIZE + GAP) - GAP + 2 * W.TAB_INSET or 0
-        frame:SetShown(shown > 0)
     end
     return side
 end
 
 -- Rows
 
--- centred "nothing here" line
+-- centered "nothing here" line
 function W.Empty(parent)
     local empty = parent:CreateFontString(nil, "OVERLAY", "GameFontDisable")
     empty:SetPoint("CENTER")
@@ -634,7 +634,7 @@ function W.Empty(parent)
 end
 
 -- A row's parts (a frame of the given height, placed by the addon): left icon
--- (with carried count from 2, and quality frame), name, a grey details line (sub)
+-- (with carried count from 2, and quality frame), name, a gray details line (sub)
 -- below it; right the state (status) and a reason's symbol with a count. The name
 -- starts at 6 + height + 6.
 function W.RowParts(row, height)
@@ -658,7 +658,7 @@ function W.RowParts(row, height)
     row.reasonText:SetPoint("BOTTOMRIGHT", row.reason, "BOTTOMRIGHT", 3, -3)
     row.status = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.status:SetPoint("RIGHT", -10, 0)
-    -- a long name is cut off with "..." before the right side (it overlapped)
+    -- single line: a long name is cut off with "..." at the right edge the addon anchors
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.name:SetJustifyH("LEFT")
     row.name:SetWordWrap(false)
@@ -680,7 +680,7 @@ function W.ShowQuality(texture, entry)
 end
 
 -- marked (mouse, keys): selection bar, gold name, brighter right side; unmarked:
--- light name (dimmed: grey), slightly dimmed icon
+-- light name (dimmed: gray), slightly dimmed icon
 function W.MarkRow(row, on, dimmed)
     row.highlight:SetShown(on and true or false)
     local name = on and GOLD or dimmed and W.DIM or W.LIGHT
@@ -691,7 +691,7 @@ function W.MarkRow(row, on, dimmed)
 end
 
 -- Reasons in a tooltip: "Why" in gold, reasons in white; a quest's "Still to do"
--- the same (needs: { text, from }, from in grey below); what a click does in
+-- the same (needs: { text, from }, from in gray below); what a click does in
 -- green. Each part only if non-empty.
 function W.AddWhy(tooltip, why, needs, click)
     if why and why[1] then
@@ -717,12 +717,12 @@ end
 function W.Waypoint(name, place)
     local mapID = math.floor(place / 1000000)
     local x, y = math.floor(place / 1000) % 1000 / 1000, place % 1000 / 1000
-    if C_Map.CanSetUserWaypointOnMap and not C_Map.CanSetUserWaypointOnMap(mapID) then
+    if not C_Map.CanSetUserWaypointOnMap(mapID) then
         W.Error(L["No waypoint possible on this map."])
         return
     end
     C_Map.SetUserWaypoint(UiMapPoint.CreateFromCoordinates(mapID, x, y))
-    if C_SuperTrack and C_SuperTrack.SetSuperTrackedUserWaypoint then C_SuperTrack.SetSuperTrackedUserWaypoint(true) end
+    C_SuperTrack.SetSuperTrackedUserWaypoint(true)
     local info = C_Map.GetMapInfo(mapID)
     W.Notice(L["Waypoint: %s, %s %d, %d"]:format(name, info and info.name or "",
         math.floor(x * 100 + 0.5), math.floor(y * 100 + 0.5)))
@@ -753,8 +753,7 @@ W.SYMBOLS = {
 
 -- an atlas, or the file (Interface\Icons ones cropped of their frame) where the client lacks it
 local function SetSymbol(texture, symbol)
-    if symbol.atlas and C_Texture.GetAtlasInfo(symbol.atlas) then
-        texture:SetAtlas(symbol.atlas)
+    if symbol.atlas and Atlas(texture, symbol.atlas) then
         texture:SetTexCoord(0, 1, 0, 1)
         return
     end
@@ -781,6 +780,10 @@ local MENU_GUARD = 0.05               -- the click that opened it does not close
 --       make, e.g. the group finder's search).
 --   menu.Mark(index), menu.Step(step), menu.Confirm()   the keys
 function W.Menu(options)
+    local tooltip = options.tooltip
+    if type(tooltip) ~= "table" or not tooltip.GetOwner then
+        error("W.Menu: options.tooltip must be a tooltip frame (GameTooltip or a copy)", 2)
+    end
     local menu = CreateFrame("Frame", nil, options.parent)
     menu:SetFrameStrata(options.strata)
     menu:SetFrameLevel(options.level)
@@ -805,10 +808,6 @@ function W.Menu(options)
     end)
     blocker:SetScript("OnMouseWheel", function() end)
     blocker:Hide()
-    local tooltip = options.tooltip
-    if type(tooltip) ~= "table" or not tooltip.GetOwner then
-        error("W.Menu: options.tooltip must be a tooltip frame (GameTooltip or a copy)", 2)
-    end
     -- the tooltip belongs to a symbol of this menu
     local function OwnTip()
         local owner = tooltip:GetOwner()
@@ -853,11 +852,9 @@ function W.Menu(options)
             menu:Hide()
             self.run()
         end)
-        -- A line that casts: a secure button over the line, shown only for such a
-        -- line (opening a profession is protected; C_TradeSkillUI.OpenRecipe from
-        -- addon code was blocked). It casts on the click, then the line runs. Needs
-        -- press and release: with the release only it did nothing, as secure buttons
-        -- act on the press by default ("action on key down").
+        -- A line that casts: a secure button over the line, shown only for such a line (opening a profession is
+        -- protected, so addon code cannot do it). It casts on the click, then the line runs. It registers press and
+        -- release: with release only, nothing is cast (secure buttons act on the press by default).
         row.secure = CreateFrame("Button", nil, row, "SecureActionButtonTemplate")
         row.secure:SetAllPoints()
         row.secure:RegisterForClicks("AnyDown", "AnyUp")
@@ -975,7 +972,11 @@ function W.Menu(options)
         end
         for i = symbols + 1, #menu.symbols do menu.symbols[i]:Hide() end
         for i = rules + 1, #menu.rules do menu.rules[i]:Hide() end
-        if #menu.slots == 0 then return end
+        if #menu.slots == 0 then
+            menu.count, menu.marked = 0, nil
+            menu:Hide()
+            return
+        end
         menu:SetSize(width, -y + 8)
         menu.count = #menu.slots
         menu:ClearAllPoints()
@@ -994,19 +995,19 @@ function W.Menu(options)
 
     -- a click anywhere else closes it (global mouse event: also on frames not ours)
     local closer = CreateFrame("Frame")
-    pcall(closer.RegisterEvent, closer, "GLOBAL_MOUSE_DOWN")
+    closer:RegisterEvent("GLOBAL_MOUSE_DOWN")
     closer:RegisterEvent("PLAYER_REGEN_DISABLED")
     closer:SetScript("OnEvent", function(_, event)
         if event == "PLAYER_REGEN_DISABLED" then
             if not menu:IsShown() then return end
-            -- hide the armed secure lines first, then the menu; blocker is ours and never protected by this file
+            -- hide the secure lines first, then the menu; the blocker is not protected
             for _, row in ipairs(menu.rows) do row.secure:Hide() end
             blocker:Hide()
             menu:Hide()
             return
         end
         if not menu:IsShown() or GetTime() - menu.shownAt < MENU_GUARD then return end
-        local focus = GetMouseFoci and GetMouseFoci()[1] or (GetMouseFocus and GetMouseFocus())
+        local focus = GetMouseFoci()[1]
         while focus do
             if focus == menu then return end
             focus = focus.GetParent and focus:GetParent()

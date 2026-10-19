@@ -1,7 +1,7 @@
 local _, D = ...
 
 -- What a trainer teaches, from its window (any state: available, too high, known), gathered
--- over visits; the 1.12 data had a fisherman teach Find Fish, Forever's does not (seen in game).
+-- over visits; it beats the 1.12 data, whose trainers differ from Forever's.
 -- PylosCompassWorldDB.npcs[npcID].teaches = "spellID,..." (LearnNPCs.lua), teachesFull = true once the
 -- whole list was read. A filtered window lists only part, so the scan turns every filter on
 -- (available, unavailable, used), reads, and restores them (SetTrainerServiceTypeFilter); once
@@ -45,7 +45,7 @@ end
 -- (class ID) or profession (skill line, D.npcTrainers)
 D.trainerListed = {}
 local function ApplyTeaches(npcID, learned)
-    if not (learned.teaches and learned.teachesFull and D.npcTrainers) then return end
+    if not (learned.teaches and learned.teachesFull) then return end
     local teaches = TeachesOf(learned.teaches) or D.npcTrainers[npcID]
     if not teaches then return end
     D.npcTrainers[npcID] = teaches
@@ -63,11 +63,11 @@ local HONORED = 6 -- UnitReaction: a trainer gives a discount from here
 
 local toggled = false -- the filters were set this visit (TRAINER_SHOW starts a visit)
 
--- Runs fn() with every trainer filter on, then restores them; false if a filter stays off
--- (cannot be set, or already set once this visit)
+-- Runs fn() with every trainer filter on, then restores them (also after an error in fn, which is raised again);
+-- false if a filter stays off (cannot be set, or already set once this visit)
 local function Unfiltered(fn)
     if not GetTrainerServiceTypeFilter then fn() return true end
-    local off = {}
+    local off = {} -- the filters that were off: set off again at the end
     for _, kind in ipairs(FILTERS) do
         if not GetTrainerServiceTypeFilter(kind) then off[#off + 1] = kind end
     end
@@ -76,12 +76,19 @@ local function Unfiltered(fn)
         toggled = true
     end
     for _, kind in ipairs(off) do SetTrainerServiceTypeFilter(kind, true) end
+    local all, ok, err = true, true, nil
     for _, kind in ipairs(FILTERS) do
-        if not GetTrainerServiceTypeFilter(kind) then off = nil break end
+        if not GetTrainerServiceTypeFilter(kind) then all = false break end
     end
-    if off then fn() end
-    for _, kind in ipairs(off or {}) do SetTrainerServiceTypeFilter(kind, false) end
-    return off ~= nil
+    if all then ok, err = pcall(fn) end
+    for _, kind in ipairs(off) do SetTrainerServiceTypeFilter(kind, false) end
+    if not ok then error(err, 0) end
+    return all
+end
+
+-- the spell book's hidden "Available" entries are made from what trainers listed and asked (World\Spells.lua)
+local function RebuildSpells()
+    if D.Built("spells") then D.Rebuild("spells") end
 end
 
 local function NoteService(index, spellID, discount)
@@ -107,7 +114,10 @@ local scanning = false -- the scan's filter changes fire TRAINER_UPDATE
 local function NoteTeaches(event)
     if event == "TRAINER_SHOW" then toggled = false end
     if scanning or not D.world or InCombatLockdown() then return end
-    if not (GetNumTrainerServices and GetTrainerServiceInfo and C_TooltipInfo and C_TooltipInfo.GetTrainerService) then return end
+    if not (GetNumTrainerServices and GetTrainerServiceInfo and C_TooltipInfo
+            and C_TooltipInfo.GetTrainerService) then
+        return
+    end
     local npcID = D.NPCOf("npc")
     local learned = D.NoteNPC(npcID)
     if not learned then return end
@@ -130,7 +140,10 @@ local function NoteTeaches(event)
     if not ran then geterrorhandler()(whole) return end -- an error must not keep the scan off for the session
     if not whole then return end
     if not added and learned.teachesFull then
-        if costs then D.BumpState("npcs") end
+        if costs then
+            D.BumpState("npcs")
+            RebuildSpells()
+        end
         return
     end
     local list = {}
@@ -139,6 +152,7 @@ local function NoteTeaches(event)
     learned.teaches, learned.teachesFull = table.concat(list, ","), true
     ApplyTeaches(npcID, learned)
     D.BumpState("npcs")
+    RebuildSpells()
 end
 D.On("TRAINER_SHOW", NoteTeaches)
 D.On("TRAINER_UPDATE", NoteTeaches)

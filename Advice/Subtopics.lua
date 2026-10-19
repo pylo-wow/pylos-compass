@@ -3,9 +3,11 @@ local D = ns.data
 local L = ns.L
 
 -- Subtopics of the window's tabs (side tabs, W.SideTabs): what a topic's list splits into.
--- Gear: Weapons (incl. shields/off-hands), Armor, Jewelry (neck, rings, trinkets, cloak). Professions: one per own profession.
--- Supplies: Food & drink, Ammo & reagents, Services (NPCs), Other. Dungeons: Dungeons, Raids. Class/Quests/Zones: none.
--- ns.Subtopics(topic, list) -> { { key, name, icon, test(entry) }, ... } for the subtopics that have something in the list.
+-- Gear: Weapons (incl. shields/off-hands), Armor, Jewelry (neck, rings, trinkets, cloak).
+-- Professions: one per own profession. Supplies: Food & drink, Ammo & reagents, Services (NPCs), Other.
+-- Dungeons: Dungeons, Raids. Class/Quests/Zones: none.
+-- ns.Subtopics(topic, list) -> { { key, name, icon, test(entry) }, ... } for the subtopics that have something in
+-- the list.
 
 local SLOTS = { INVTYPE_SHIELD = "weapons", INVTYPE_HOLDABLE = "weapons", INVTYPE_RELIC = "weapons",
     INVTYPE_NECK = "jewelry", INVTYPE_FINGER = "jewelry", INVTYPE_TRINKET = "jewelry", INVTYPE_CLOAK = "jewelry" }
@@ -27,19 +29,28 @@ local function Is(kindOf, kind) return function(entry) return kindOf(entry) == k
 
 local FIXED = {
     gear = {
-        { key = "weapons", name = L["Weapons"], icon = 135274, test = Is(GearKind, "weapons") },  -- INV_Sword_04
-        { key = "armor", name = L["Armor"], icon = 132736, test = Is(GearKind, "armor") },        -- INV_Chest_Plate01
-        { key = "jewelry", name = L["Jewelry"], icon = 133345, test = Is(GearKind, "jewelry") },  -- INV_Jewelry_Ring_03
+        { key = "weapons", name = L["Weapons"], icon = 135274, -- INV_Sword_04
+          test = Is(GearKind, "weapons") },
+        { key = "armor", name = L["Armor"], icon = 132736, -- INV_Chest_Plate01
+          test = Is(GearKind, "armor") },
+        { key = "jewelry", name = L["Jewelry"], icon = 133345, -- INV_Jewelry_Ring_03
+          test = Is(GearKind, "jewelry") },
     },
     supplies = {
-        { key = "food", name = L["Food & drink"], icon = 133947, test = Is(SupplyKind, "food") },        -- INV_Misc_Food_05
-        { key = "ammo", name = L["Ammo & reagents"], icon = 132382, test = Is(SupplyKind, "ammo") },     -- INV_Ammo_Arrow_02
-        { key = "services", name = L["Services"], icon = 133057, test = Is(SupplyKind, "services") },   -- INV_Hammer_20
-        { key = "other", name = L["Other"], icon = 134400, test = Is(SupplyKind, "other") },             -- INV_Misc_QuestionMark
+        { key = "food", name = L["Food & drink"], icon = 133947, -- INV_Misc_Food_05
+          test = Is(SupplyKind, "food") },
+        { key = "ammo", name = L["Ammo & reagents"], icon = 132382, -- INV_Ammo_Arrow_02
+          test = Is(SupplyKind, "ammo") },
+        { key = "services", name = L["Services"], icon = 133057, -- INV_Hammer_20
+          test = Is(SupplyKind, "services") },
+        { key = "other", name = L["Other"], icon = 134400, -- INV_Misc_QuestionMark
+          test = Is(SupplyKind, "other") },
     },
     dungeons = {
-        { key = "dungeon", name = L["Dungeons"], icon = 136334, test = function(e) return e.kind == 1 end }, -- LFGIcon-Dungeon
-        { key = "raid", name = L["Raids"], icon = 136351, test = function(e) return e.kind == 2 end },      -- LFGIcon-Raid
+        { key = "dungeon", name = L["Dungeons"], icon = 136334, -- LFGIcon-Dungeon
+          test = function(e) return e.kind == 1 end },
+        { key = "raid", name = L["Raids"], icon = 136351, -- LFGIcon-Raid
+          test = function(e) return e.kind == 2 end },
     },
 }
 

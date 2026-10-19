@@ -12,13 +12,14 @@ local ns = select(2, ...).search
 --   Bar.lua       the bar's contents (RenderBar), opening and closing
 -- They draw ns.state; what the clicks do is in View.lua. What a file gives the others is a field of ns.ui.
 -- Animations run on the driver of UI\Kit\Widgets.lua (W.Tween, W.Follow): nothing runs per frame while
--- nothing moves. Times and curves are the shared widgets' (W.Tween).
+-- nothing moves.
 
 local W = ns.widgets
 local ui = {}
 ns.ui = ui
+ui.WINDOW_GAP = 6 -- the window below the bar starts this far below it
 
--- own tooltip next to the list: the GameTooltip adds the equipped-item comparison, which covered the list
+-- own tooltip next to the list: the GameTooltip adds the equipped-item comparison, which would cover the list
 local tip = CreateFrame("GameTooltip", "PylosCompassTooltip", UIParent, "GameTooltipTemplate")
 tip:SetFrameStrata("TOOLTIP")
 tip.noGatherInfo = true -- Pylos GatherInfo: we add its line ourselves (option)
@@ -29,8 +30,8 @@ ui.tip = tip
 function ui.Rows() return ui.rowsShown or ns.MAX_RESULTS end
 
 -- Opening order
--- Each step starts when the step it waits for has finished (plus a pause), so a longer one (a tall list)
--- moves the later ones back instead of overlapping them:
+-- Each step starts when the step it waits for has finished (the close tab adds a short delay), so a longer
+-- one (a tall list) moves the later ones back instead of overlapping them:
 --   start    the bar grows (Bar.lua); the category tabs rise with it, one after another (Tabs.lua)
 --   bar      the bar stands: the list folds open to its full height
 --   list     the list stands (or the detail view shows): the pinned filter window slides out (Filters.lua)
@@ -56,7 +57,7 @@ function ui.Fill(parent, layer, r, g, b, a)
 end
 
 -- a thin bronze frame of four one-pixel lines: inside the frame's edge, or one pixel outside it (outside:
--- a bar's fill stays inside its frame; the other line-end offset made the fill stick out)
+-- for a bar, whose fill stays inside its frame)
 local BRONZE = W.BRONZE
 function ui.Border(frame, layer, outside)
     local o = outside and 1 or 0
@@ -95,8 +96,10 @@ function ui.FitArt(frame)
     local zoom = frame.artZoom or 1
     shownWidth, shownHeight = shownWidth / zoom, shownHeight / zoom
     local Clamp = W.Clamp
-    local x = Clamp(((frame.artFocusX or 0.5) - shownWidth / 2) / math.max(1 - shownWidth, 0.0001)) * (1 - shownWidth)
-    local y = Clamp(((frame.artFocusY or 0.5) - shownHeight / 2) / math.max(1 - shownHeight, 0.0001)) * (1 - shownHeight)
+    local x = Clamp(((frame.artFocusX or 0.5) - shownWidth / 2) / math.max(1 - shownWidth, 0.0001))
+        * (1 - shownWidth)
+    local y = Clamp(((frame.artFocusY or 0.5) - shownHeight / 2) / math.max(1 - shownHeight, 0.0001))
+        * (1 - shownHeight)
     local spanX, spanY = right - left, bottom - top
     art:SetTexture(info.file or info.filename)
     art:SetTexCoord(left + spanX * x, left + spanX * (x + shownWidth), top + spanY * y, top + spanY * (y + shownHeight))
@@ -129,8 +132,8 @@ ui.CatchMouse(bar)
 ui.bar = bar
 
 -- Hovering: a row (or overview cell) marks itself only when the mouse really moves. Typing changes the
--- rows under a resting cursor, which marked whichever row it stood on: the cursor position when the rows
--- last changed is kept (ui.NoteCursor); a row entered with the cursor still there waits until it moves.
+-- rows under a resting cursor, which would mark whichever row it stands on: the cursor position when the
+-- rows last changed is kept (ui.NoteCursor); a row entered with the cursor still there waits until it moves.
 -- Only then something watches the cursor.
 local stillX, stillY
 local waiting = {} -- frame -> what hovering it does: action(frame)

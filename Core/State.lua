@@ -6,34 +6,27 @@ if D.off then return end
 -- A state is a named part of the game that results depend on; its version grows whenever it may have changed.
 -- A result kept with the versions it was made from is valid while they are unchanged.
 --   D.State(name)          version now (0 before anything happened)
---   D.BumpState(name)      something changed it (addons may add their own states)
+--   D.BumpState(name)      something changed it (any file may add its own states)
 --   D.OnState(names, fn)   fn() once in the next frame after any of the states (name or list) changed
 --   D.Cache(deps, maxAge)  table that empties itself when a dep state changed or after maxAge seconds (nil: never):
 --                          c = D.Cache({ "gear", "level" }); c.Get() -> table, renewed (true when just emptied);
 --                          c.Clear() empties it at once
--- A state learns of a change by events (bump at once, one frame for all), polls (a cheap reading, at most once per
+-- A state learns of a change by events (bumped at once, one frame for all), polls (a cheap reading, at most once per
 -- frame and only when the state is asked for: for what changes without an event, e.g. position, and as a guard where
--- events come late: UnitLevel is still the old level during PLAYER_LEVEL_UP) or code (D.BumpState from the changing file).
--- The states (event-driven ones: see EVENTS below):
+-- events come late: UnitLevel is still the old level during PLAYER_LEVEL_UP) or code (D.BumpState from the changing
+-- file). Built in (see EVENTS and the polls below):
 --   frame       every frame (per-frame cache: D.Cache({ "frame" }))
---   bags, durability, spells, skills, target, group, quests: events only
+--   bags, durability, spells, skills, target, group, quests, travel (hearthstone bound): events only
 --   gear        poll: the worn item IDs
 --   level       poll: UnitLevel
 --   money       poll: GetMoney
 --   zone        poll: the best map and whether you are in an instance
 --   position    poll: your map and spot (to a ten-thousandth of the map)
 --   ratings     poll: hit, spell hit and defense (D.PlayerRatings; auras change them without an event)
---   talents     PLAYER_LOGIN too: talents can be read from then on
---   travel      also code: flight point learned (You\Taxi.lua), mount speed seen (You\Hearth.lua)
---   npcs        code: NPC met in a zone or its facts learned (World\LearnNPCs.lua, LearnTrainers.lua)
---   drops       code: NPC drops learned (D.npcDrops, D.itemDroppedBy); apart from "npcs", which bumps far more often
---   prices      code: vendor price or discount learned at a merchant window (World\Prices.lua)
---   events      code: a world event begins/ends, or one of its NPCs was first seen (World\Events.lua)
---   data:<key>  code: that domain built or dropped (Core\Build.lua)
---   data        code: any domain built or dropped
--- Caching: depend on exactly what a result needs ("frame" empties every frame, "data:items" lives until items are
--- rebuilt); leave cheap results uncached. A poll runs once per frame whenever anything asks, so keep it cheap
--- (no string building, no pass over the data).
+--   talents     events, PLAYER_LOGIN too: talents can be read from then on
+-- Any other name is a state that code bumps. Caching: depend on exactly what a result needs ("frame" empties every
+-- frame); leave cheap results uncached. A poll runs once per frame whenever anything asks, so keep it cheap (no
+-- string building, no pass over the data).
 
 local versions = {}   -- name -> version
 local polls = {}      -- name -> function(): a reading (number) of the game
@@ -62,7 +55,7 @@ local function Tell()
     end
 end
 
--- listeners are told next frame by a hidden frame (C_Timer.After made a timer per changed frame)
+-- listeners are told next frame by a hidden frame (cheaper than a C_Timer per changed frame)
 local teller = CreateFrame("Frame")
 teller:Hide()
 teller:SetScript("OnUpdate", function(self)
@@ -133,7 +126,7 @@ end
 
 polls.frame = GetTime
 polls.level = function() return UnitLevel("player") end
-polls.money = function() return GetMoney and GetMoney() or 0 end
+polls.money = function() return GetMoney() end
 polls.zone = function()
     local mapID = C_Map.GetBestMapForUnit("player")
     if D.Secret(mapID) then return -1 end
@@ -148,19 +141,13 @@ polls.position = function()
     if not x then return mapID end
     return mapID * 100000000 + math.floor(x * 10000) * 10000 + math.floor(y * 10000)
 end
--- same calls as D.PlayerRatings without its table; hit and spell hit are percents below 100, so the three fit one number
+-- same calls as D.PlayerRatings without its table; hit and spell hit are percents below 100, so the three fit one
+-- number
 polls.ratings = function()
-    local hit = GetHitModifier and GetHitModifier() or 0
-    local spellHit = GetSpellHitModifier and GetSpellHitModifier() or 0
-    local defense = 0
-    local defenseSkill = UnitDefenseSkill or UnitDefense -- UnitDefenseSkill is the client's name (UnitDocumentation.lua)
-    if defenseSkill then
-        local base, bonus = defenseSkill("player")
-        if D.Secret(base) or D.Secret(bonus) then return -1 end
-        defense = (base or 0) + (bonus or 0)
-    end
-    if D.Secret(hit) or D.Secret(spellHit) then return -1 end
-    return (hit or 0) + (spellHit or 0) * 1000 + defense * 1000000
+    local hit, spellHit = GetHitModifier(), GetSpellHitModifier()
+    local base, bonus = UnitDefenseSkill("player")
+    if D.Secret(base) or D.Secret(bonus) or D.Secret(hit) or D.Secret(spellHit) then return -1 end
+    return (hit or 0) + (spellHit or 0) * 1000 + ((base or 0) + (bonus or 0)) * 1000000
 end
 -- worn items as one number: each slot's item ID times its own prime, so a change in any slot changes the sum
 local PRIMES = { [0] = 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71 }
@@ -184,7 +171,8 @@ local EVENTS = {
     QUEST_TURNED_IN = { "quests" },
     SPELLS_CHANGED = { "spells" }, LEARNED_SPELL_IN_SKILL_LINE = { "spells" },
     SKILL_LINES_CHANGED = { "skills" },
-    PLAYER_TALENT_UPDATE = { "talents" }, TRAIT_CONFIG_UPDATED = { "talents" }, CHARACTER_POINTS_CHANGED = { "talents" },
+    PLAYER_TALENT_UPDATE = { "talents" }, TRAIT_CONFIG_UPDATED = { "talents" },
+    CHARACTER_POINTS_CHANGED = { "talents" },
     PLAYER_LOGIN = { "talents" },
     HEARTHSTONE_BOUND = { "travel" },
     PLAYER_TARGET_CHANGED = { "target" },

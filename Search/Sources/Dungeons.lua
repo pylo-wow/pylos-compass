@@ -4,10 +4,10 @@ local D = ns.data
 
 -- Dungeons: the instances of the game, dungeons and raids with the levels they are meant for, how many
 -- players, the zone of the entrance (searchable: "Westfall" finds the Deadmines) and the bosses in order.
--- Entries come from Data (World\Dungeons.lua). Opened without text: all by level, dungeons before
+-- Entries come from the data layer (World\Dungeons.lua). Opened without text: all by level, dungeons before
 -- raids of the same level. Tabs: dungeons, raids; filter: your level. No action.
 
--- texts (kind, levels, raid size) and tooltip lines: Data (World\Lines.lua), shared with the recommendations
+-- texts (kind, levels, raid size) and tooltip lines: World\Lines.lua, shared with the recommendations
 local KINDS, Levels, Players = D.DUNGEON_KINDS, D.DungeonLevelText, D.DungeonPlayersText
 
 local function ZoneName(id)
@@ -19,7 +19,7 @@ local function Describe(entry)
     return { KINDS[entry.kind], Players(entry), ZoneName(entry.zone) }
 end
 
--- Row state (UI\List.lua): its levels ("Level 18-25") coloured as the game colours a foe's level: by where
+-- Row state (UI\List.lua): its levels ("Level 18-25") colored as the game colors a foe's level: by where
 -- it starts while you are below it, even (yellow) within it, by where it ends once you are above it
 -- (green, then grey)
 local function State(entry)
@@ -33,16 +33,31 @@ local function State(entry)
     return text, ns.ConColor(level)
 end
 
+-- a dungeon's quests (map ID -> list), rebuilt only when the data layer rebuilt the quests
+local questsOf = D.Cache({ "data:quests" })
+local NONE = {}
+local function DungeonQuests(mapID)
+    local byDungeon, renewed = questsOf.Get()
+    if renewed then
+        for _, quest in ipairs(D.Entries("quests")) do
+            local dungeon = quest.dungeon
+            if dungeon then
+                byDungeon[dungeon] = byDungeon[dungeon] or {}
+                table.insert(byDungeon[dungeon], quest)
+            end
+        end
+    end
+    return byDungeon[mapID] or NONE
+end
+
 -- Tooltip's For you (UI\Tooltip.lua): its quests in your log, and the ones you may take
 local function ForYou(entry, add)
     local inLog, toTake = 0, 0
-    for _, quest in ipairs(D.Entries("quests")) do
-        if quest.dungeon == entry.mapID then
-            if C_QuestLog.IsOnQuest(quest.questID) == true then
-                inLog = inLog + 1
-            elseif not C_QuestLog.IsQuestFlaggedCompleted(quest.questID) and D.QuestForYou(quest) then
-                toTake = toTake + 1
-            end
+    for _, quest in ipairs(DungeonQuests(entry.mapID)) do
+        if C_QuestLog.IsOnQuest(quest.questID) == true then
+            inLog = inLog + 1
+        elseif not C_QuestLog.IsQuestFlaggedCompleted(quest.questID) and D.QuestForYou(quest) then
+            toTake = toTake + 1
         end
     end
     if inLog > 0 then add(L["Quests in your log: %d"]:format(inLog), "active") end
@@ -96,7 +111,7 @@ local symbolAtlas, symbolFile = ns.MicroMenuSymbol("LFDMicroButton", "LFGMicroBu
 source = ns.RegisterSource({
     key = "dungeons",
     domain = "dungeons",
-    name = L["Dungeons & Raids"],
+    name = L["Dungeons & raids"],
     hint = L["Search dungeons and raids"],
     icon = symbolFile or "Interface\\Icons\\INV_Misc_Key_03",
     iconAtlas = symbolAtlas or "ui-hud-micromenu-groupfinder-up-c60-2x",

@@ -2,7 +2,7 @@ local _, D = ...
 
 -- Quests: every quest with a title (Data\QuestNames_enUS.lua) and facts from the client's quest
 -- cache (Data\QuestFacts.lua; format in its header), as entries { name, questID } with ID
--- "q:<quest>". Built in the background (2,785 quests) only when an addon asks (D.Need).
+-- "q:<quest>". Built in the background, only when something asks for it (D.Need).
 -- The facts answer without the domain: D.QuestOf(questID), plus reverse links for other domains
 -- (quests that need an item or NPC, reward an item, or are begun by an item; built on first use).
 -- Givers and takers are learned in play (LearnQuests.lua: D.QuestGiver, D.QuestTaker).
@@ -11,8 +11,16 @@ local KEY = "quests"
 
 D.QUEST_TAG = { ELITE = 1, PVP = 41, RAID = 62, DUNGEON = 81 }
 
--- Forever's playable races as race bits (quest.races): race IDs 1-8 as bits 0-7, 95 High Order 256, 96 Windshaper 512
-local RACE_BIT = { [1] = 1, [2] = 2, [3] = 4, [4] = 8, [5] = 16, [6] = 32, [7] = 64, [8] = 128, [95] = 256, [96] = 512 }
+-- Forever's playable races as race bits (quest.races): race IDs 1-8 as bits 0-7, 95 High Order 256,
+-- 96 Windshaper 512
+local RACE_BIT = {
+    [1] = 1, [2] = 2, [3] = 4, [4] = 8, [5] = 16, [6] = 32, [7] = 64, [8] = 128, [95] = 256, [96] = 512 }
+-- D.RaceBit(): your race's bit, nil if the data does not know the race.
+-- D.RaceFits(races, raceBit): does a race mask (nil or 0: all) allow it; true if raceBit is nil
+function D.RaceBit() return RACE_BIT[select(3, UnitRace("player")) or 0] end
+function D.RaceFits(races, raceBit)
+    return races == nil or races == 0 or raceBit == nil or math.floor(races / raceBit) % 2 == 1
+end
 local ALLIANCE, HORDE = 1 + 4 + 8 + 64 + 256, 2 + 16 + 32 + 128 + 512
 
 -- The facts of a quest
@@ -43,21 +51,20 @@ local ALLIANCE, HORDE = 1 + 4 + 8 + 64 + 256, 2 + 16 + 32 + 128 + 512
 --   startedBy   { itemID, ... } items that begin it (ItemSparse)
 
 -- Faction a quest is for: by races, else by reputation given with a one-sided faction
--- (capitals, battleground sides): the cache says "all races" for many one-sided quests (the
--- Undercity's "A Recipe For Death" was suggested to a human). nil: both or unknown.
+-- (capitals, battleground sides): the cache says "all races" for many one-sided quests (e.g. the
+-- Undercity's "A Recipe For Death"). nil: both or unknown.
 -- races: race bits; reputation: the data's "faction:amount,...".
--- A class quest with neither (questID given; the cache names none for most): the faction our
--- data derives (D.questClassSide, Data\QuestLinks.lua: races, 1.12 required races, givers' and
+-- A class quest with neither (questID given; the cache names none for most): the faction the data
+-- derives (D.questClassSide, Data\QuestLinks.lua: races, 1.12 required races, givers' and
 -- takers' reaction), else the faction of the giver seen in play (friendly to one side only, by
--- its reaction in Data\NPCFacts.lua; once the NPC list is built)
+-- its reaction in Data\NPCFacts.lua; once the NPC list is built). That last answer depends on
+-- the NPC list and on what was learned, so D.QuestFact asks for it each time instead of keeping it.
 local CLASS_SIDES = { "Alliance", "Horde" }
-local REACTION_SHIFT = 536870912 -- Data\NPCFacts.lua: reaction = alliance * 4 + horde
 local function GiverSide(questID)
     local learned = D.world and D.world.quests and D.world.quests[questID]
     local entry = learned and learned.from and D.NPCByID and D.NPCByID(learned.from)
     if not entry then return nil end
-    local both = math.floor(entry.packed / REACTION_SHIFT) % 16
-    local alliance, horde = math.floor(both / 4), both % 4
+    local alliance, horde = D.NPCDataReactions(entry)
     if alliance == 3 and horde ~= 3 then return "Alliance" end
     if horde == 3 and alliance ~= 3 then return "Horde" end
     return nil
@@ -67,7 +74,7 @@ local SIDE_FACTIONS = {
     [509] = "Alliance",
     [76] = "Horde", [81] = "Horde", [68] = "Horde", [530] = "Horde", [729] = "Horde", [889] = "Horde", [510] = "Horde",
 }
-function D.QuestSide(races, reputation, questID)
+local function DataSide(races, reputation, questID) -- everything but the giver seen in play
     if races ~= 0 then
         if bit.band(races, HORDE) == 0 then return "Alliance" end
         if bit.band(races, ALLIANCE) == 0 then return "Horde" end
@@ -82,7 +89,11 @@ function D.QuestSide(races, reputation, questID)
         end
     end
     if side == nil and questID and D.questClassSide then side = CLASS_SIDES[D.questClassSide[questID] or 0] end
-    if side == nil and questID then side = GiverSide(questID) end
+    return side
+end
+function D.QuestSide(races, reputation, questID)
+    local side = DataSide(races, reputation, questID)
+    if side == nil and races == 0 and questID then side = GiverSide(questID) end
     return side
 end
 
@@ -118,7 +129,8 @@ function D.QuestOf(questID)
         classID = sort < 0 and D.questSortClass and D.questSortClass[-sort] or nil,
         skillLine = sort < 0 and D.questSortSkill and D.questSortSkill[-sort] or nil,
         nextQuest = Nonzero(head[8]), providedItem = Nonzero(head[9]), xp = head[10], money = head[11],
-        repeats = D.QuestRepeats(questID), rewards = Counts(parts[2]), choices = Counts(parts[3]), spells = {}, reputation = {}, objectives = {}, startedBy = {},
+        repeats = D.QuestRepeats(questID), rewards = Counts(parts[2]), choices = Counts(parts[3]),
+        spells = {}, reputation = {}, objectives = {}, startedBy = {},
     }
     for id in (parts[4] or ""):gmatch("%d+") do q.spells[#q.spells + 1] = tonumber(id) end
     for faction, amount in (parts[5] or ""):gmatch("(%d+):(%-?%d+)") do
@@ -143,7 +155,7 @@ local function Marked(mapID)
     local marks = onMap[mapID]
     if marks then return marks end
     marks = {}
-    for _, info in ipairs(C_QuestLog.GetQuestsOnMap and C_QuestLog.GetQuestsOnMap(mapID) or {}) do
+    for _, info in ipairs(C_QuestLog.GetQuestsOnMap(mapID) or {}) do
         if info.questID then marks[info.questID] = D.Place(mapID, info.x, info.y) end
     end
     onMap[mapID] = marks
@@ -180,8 +192,8 @@ function D.QuestGreyAfter(questLevel)
 end
 
 -- Single facts of a quest (level, zone, races, ...; not its lists), kept for the session: the
--- weak cache above is collected, and every quest filter then decoded all 2,800 quests again
--- (13-18 ms and 7 MB garbage). One array of numbers per quest asked (false for nil), ~0.3 KB.
+-- weak cache above is collected, and decoding every quest again for each filter is costly.
+-- One array of numbers per quest asked (false for nil).
 local SINGLE = { "level", "minLevel", "sort", "area", "questSort", "zone", "dungeon", "tag", "races", "side",
     "classID", "skillLine", "nextQuest", "providedItem", "xp", "money", "repeats" }
 local SINGLE_AT = {}
@@ -190,7 +202,7 @@ local singles = {} -- questID -> array (SINGLE's order) or false: no such quest
 local head = {}    -- numbers of a text's head, reused
 local function Or(value) if value == nil then return false end return value end
 -- Reads only the text's head (and its reputation part for the side): no lists or strings
--- for the other parts (using D.QuestOf made 7 MB of garbage for the first quest tab)
+-- for the other parts, which D.QuestOf would build
 local function Single(questID)
     local s = singles[questID]
     if s == nil then
@@ -206,7 +218,7 @@ local function Single(questID)
             local sort, races = head[3], head[7]
             local reputation = races == 0 and text:match("^[^|]*|[^|]*|[^|]*|[^|]*|([^|]*)") or nil
             s = { head[1], head[2], sort, Or(sort > 0 and sort or nil), Or(sort < 0 and -sort or nil),
-                Or(Nonzero(head[4])), Or(Nonzero(head[5])), head[6], races, Or(D.QuestSide(races, reputation, questID)),
+                Or(Nonzero(head[4])), Or(Nonzero(head[5])), head[6], races, Or(DataSide(races, reputation, questID)),
                 Or(sort < 0 and D.questSortClass and D.questSortClass[-sort] or nil),
                 Or(sort < 0 and D.questSortSkill and D.questSortSkill[-sort] or nil),
                 Or(Nonzero(head[8])), Or(Nonzero(head[9])), head[10], head[11], Or(REPEATS[head[12] or 0]) }
@@ -221,7 +233,9 @@ local function Fact(questID, name)
     local s = Single(questID)
     if not s then return nil end
     local value = s[SINGLE_AT[name]]
-    if value == false then return nil end
+    if value == false then
+        return name == "side" and s[SINGLE_AT.races] == 0 and GiverSide(questID) or nil
+    end
     return value
 end
 D.QuestFact = Fact
@@ -247,8 +261,7 @@ end
 
 function D.QuestRaceFits(side, races)
     if side and side ~= UnitFactionGroup("player") then return false end
-    local raceBit = RACE_BIT[select(3, UnitRace("player")) or 0] -- nil: race unknown to the data
-    return races == nil or races == 0 or raceBit == nil or math.floor(races / raceBit) % 2 == 1
+    return D.RaceFits(races, D.RaceBit())
 end
 
 -- The entries
@@ -258,7 +271,7 @@ end
 local fields = D.fields[KEY] or {}
 D.fields[KEY] = fields
 for _, name in ipairs({ "level", "minLevel", "sort", "area", "questSort", "zone", "dungeon", "tag", "races", "side",
-        "classID", "skillLine", "nextQuest", "providedItem", "xp", "money", "repeats", "rewards", "choices", "spells",
+        "classID", "skillLine", "nextQuest", "providedItem", "xp", "money", "rewards", "choices", "spells",
         "reputation", "objectives", "startedBy" }) do
     if SINGLE_AT[name] then
         fields[name] = function(entry) return Fact(entry.questID, name) end
@@ -270,6 +283,7 @@ for _, name in ipairs({ "level", "minLevel", "sort", "area", "questSort", "zone"
     end
 end
 
+-- (learned in play, else the data's: LearnQuests.lua)
 fields.repeats = function(entry) return D.QuestRepeats(entry.questID) end
 
 local function Collect(list, Pause)
@@ -289,14 +303,13 @@ end
 D.RegisterDomain({ key = KEY, background = true, collect = Collect })
 
 -- The links
--- item ID / NPC ID -> quests (IDs, ascending), built from the facts (one pass over 2,785
--- texts) in the background after the quests are built, or on first use if that comes first.
+-- item ID / NPC ID -> quests (IDs, ascending), built from the facts in one pass in the
+-- background after the quests are built, or on first use if that comes first.
 local needItem, needNPC, rewardItem, startItem
 local NONE = {}
-local function NoPause() end
 local function Maps(Pause)
     if needItem then return end
-    Pause = Pause or NoPause
+    Pause = Pause or D.NoPause
     local need, npc, reward, start = {}, {}, {}, {}
     local function Note(map, id, questID)
         local list = map[id] or {}

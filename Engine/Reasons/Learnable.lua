@@ -2,12 +2,13 @@ local _, D = ...
 local ns = D.engine
 local L = ns.L
 
--- Learnable: what a trainer would teach you now and you have not learned (the spells' list opened without text starts with it).
+-- Learnable: what a trainer would teach you now and you have not learned (the spells' list opened without text starts
+-- with it).
 --   spells   your class (and race), your level reaches the trainer level, the rank before it is learned
 --   recipes  D.RecipeLearnable says "now" (D.LearnableNow)
 --   items    a recipe item in your bags whose recipe you can learn now: use it
--- The reach is the way to your trainer (reach.Trainer) or to the recipe item. Where a trainer of yours is known, his own
--- row (TrainsYou.lua) stands for his spells and carries the way for all; with none known they stand on their own.
+-- The reach is the way to your trainer (reach.Trainer) or to the recipe item. Where a trainer of yours is known, his
+-- own row (TrainsYou.lua) stands for his spells and carries the way for all; with none known they stand on their own.
 
 local classID = 0
 
@@ -18,16 +19,18 @@ local function ToTrainer(teaches)
     return factor, trainer.name .. (words and (", " .. words) or "")
 end
 
--- what a trainer teaches it: your class, or its profession (nil: a recipe item teaches it)
-local function Teaches(entry)
-    if entry.trainLevel then return classID end
+-- what a trainer teaches it: your class (class), or its profession (nil: a recipe item teaches it); TrainsYou.lua too
+local function Teaches(entry, class)
+    if entry.trainLevel then return class end
     if entry.skillLine and (entry.recipeItem or 0) == 0 then return entry.skillLine end
     return nil
 end
+ns.Teaches = Teaches
 
 ns.RegisterReason({
     key = "learnable",
-    -- weight 0.7, the least of a stage: one spell or recipe is a small step; the trainer's row (trainsYou) stands for all
+    -- weight 0.7: the least of a stage, one spell or recipe is a small step; the trainer's row (trainsYou) stands for
+    -- all
     stage = "progress", weight = 0.7, label = "Learnable",
     sources = { "spells", "professions", "items" },
     -- wherever you stand: your spells, level, skills, bags, the trainers' lists seen ("npcs")
@@ -44,7 +47,7 @@ ns.RegisterReason({
     profession = function(entry) return entry.itemID ~= nil or entry.skillLine ~= nil end,
     -- a trainer of yours is known: his row stands for it
     covered = function(entry)
-        local teaches = Teaches(entry)
+        local teaches = Teaches(entry, classID)
         return teaches ~= nil and ns.reach.Trainer(teaches) ~= nil
     end,
     why = function(entry)

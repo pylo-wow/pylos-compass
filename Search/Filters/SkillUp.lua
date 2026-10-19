@@ -5,7 +5,7 @@ local D = ns.data
 -- Skill up: your learned recipes that still raise your skill (orange, yellow or green:
 -- D.RecipeSkillChance above 0). Sorted by fit as always, so typed text decides.
 
--- your learned recipes: rebuilt only when Data rebuilt them
+-- your learned recipes: rebuilt only when the data layer rebuilt them
 local pool = D.Cache({ "data:professions" })
 
 ns.RegisterFilter({
@@ -16,7 +16,7 @@ ns.RegisterFilter({
     icon = "Interface\\Icons\\INV_Scroll_03",
     sources = { "professions" },
     test = function(entry) return (D.RecipeSkillChance(entry) or 0) > 0 end,
-    -- only learned recipes can pass: a few hundred instead of 2,666
+    -- only learned recipes can pass: a few hundred instead of all
     pool = function()
         local list, renewed = pool.Get()
         if not renewed then return list end

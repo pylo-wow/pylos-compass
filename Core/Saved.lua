@@ -2,7 +2,8 @@ local addonName, D = ...
 
 -- PylosCompassWorldDB: everything learned in the game, kept only on your computer.
 --   met           zone an NPC was met in (World\LearnNPCs.lua)
---   vendorPrices  prices without discount where the data is wrong or missing, and each vendor's discount (World\Prices.lua)
+--   vendorPrices  prices without discount where the data is wrong or missing, and each vendor's discount
+--                 (World\Prices.lua)
 --   npcs          NPCs seen while playing (World\LearnNPCs.lua), incl. the spells a trainer lists (LearnTrainers.lua)
 --   training      what a trainer's service asks: level, skill, cost (World\LearnTrainers.lua)
 --   quests        who gives and who takes each quest (World\LearnQuests.lua)
@@ -10,29 +11,15 @@ local addonName, D = ...
 --   crossings     walked crossings between zones (World\LearnCrossings.lua)
 --   taxi          flight points each character knows (You\Taxi.lua)
 --   travel        chars = each character's mount speed and hearthstone place (You\Hearth.lua)
--- Set up at addon load; then the learning files put their data into the data tables (D.OnLoaded).
+--   eventsSeen    event key -> time an NPC of it was last seen (World\Events.lua creates it)
+-- Set up at ADDON_LOADED; then the functions given to D.OnLoaded run (the learning files fill the tables).
 
 local loaded = {} -- functions to call once PylosCompassWorldDB is set up
 function D.OnLoaded(fn) loaded[#loaded + 1] = fn end
 
--- shape 1: the clean-ups of the first saved data (also runs once on data from before shapes were counted)
-local function Migrate1(db)
-    -- obsolete: prices now come without discount from Data\ItemPrices.lua
-    db.prices = nil
-    db.version = nil
-    -- "seen" was never read: drop it
-    for _, list in ipairs({ db.npcs, db.quests }) do
-        if type(list) == "table" then
-            for _, learned in pairs(list) do
-                if type(learned) == "table" then learned.seen = nil end
-            end
-        end
-    end
-end
-
 D.On("ADDON_LOADED", function(_, name)
     if name ~= addonName or D.world then return end
-    local db = D.kit.Saved("PylosCompassWorldDB", { version = 1, migrations = { [1] = Migrate1 } })
+    local db = D.kit.Saved("PylosCompassWorldDB")
     -- a missing or wrong-typed table is replaced, so the learners can rely on them
     local function Table(parent, key)
         if type(parent[key]) ~= "table" then parent[key] = {} end

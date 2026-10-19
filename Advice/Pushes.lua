@@ -2,10 +2,13 @@ local ns = select(2, ...).advice
 local D = ns.data
 local L = ns.L
 
--- Nudge rules (chain, levels, log: Push.lua). Each judges per candidate whether it is big, missable and sure, with words for the log.
---   equip: upgrade in bags, big from BIG_SHARE % (medium). trainer: class trainer with new spells within NEAR yd (medium).
---   skillcap: profession at its rank cap (75, 150), its trainer within NEAR yd (medium). repair: worst piece below WORN, repairer within NEAR yd; loud before a dungeon entrance.
---   bags: few free slots, vendor within NEAR yd (quiet at LOW, medium at FULL). rare: rare nearby, loud, own budget, click targets it.
+-- Nudge rules (chain, levels, log: Push.lua). Each judges per candidate whether it is big, missable and sure, with
+-- words for the log.
+--   equip: upgrade in bags, big from BIG_SHARE % (medium). trainer: class trainer with new spells within NEAR yd
+--   (medium). skillcap: profession at its rank cap (75, 150), its trainer within NEAR yd (medium).
+--   repair: worst piece below WORN, repairer within NEAR yd; loud before a dungeon entrance.
+--   bags: few free slots, vendor within NEAR yd (quiet at LOW, medium at FULL).
+--   rare: rare nearby, loud, own budget, click targets it.
 -- "sure" needs places seen in WoW Forever or game-given trainer data; the 1.12 data's spots are unchecked.
 
 local NEAR = 400       -- yards
@@ -80,12 +83,15 @@ ns.RegisterPush({
         local yards = D.NPCDistance(trainer)
         add({
             situation = "trainer:" .. table.concat(ids, "."), entry = trainer, icon = trainer,
-            title = note.count == 1 and L["A new spell to learn"] or L["%d new spells to learn"]:format(note.count or 0),
+            title = note.count == 1 and L["A new spell to learn"]
+                or L["%d new spells to learn"]:format(note.count or 0),
             text = L["%s is %d yd away"]:format(trainer.name, yards or 0),
             action = Waypoint(trainer),
-            big = { reason.affordable(trainer) > 0, ("%d spells, %d affordable"):format(note.count or 0, reason.affordable(trainer)) },
+            big = { reason.affordable(trainer) > 0,
+                ("%d spells, %d affordable"):format(note.count or 0, reason.affordable(trainer)) },
             missable = { yards ~= nil and yards <= NEAR, Yards(yards) },
-            sure = { place ~= nil and (seen or D.NPCOrigin(trainer, "trains") == "seen"), seen and "spot seen" or "1.12 spot" },
+            sure = { place ~= nil and (seen or D.NPCOrigin(trainer, "trains") == "seen"),
+                seen and "spot seen" or "1.12 spot" },
         })
     end,
 })
@@ -114,7 +120,8 @@ ns.RegisterPush({
                     action = trainer and Waypoint(trainer),
                     big = { true, ("%d/%d"):format(rank, maximum) },
                     missable = { yards ~= nil and yards <= NEAR, Yards(yards) },
-                    sure = { needs ~= nil and UnitLevel("player") >= needs, needs and ("from level %d"):format(needs) or "artisan" },
+                    sure = { needs ~= nil and UnitLevel("player") >= needs,
+                        needs and ("from level %d"):format(needs) or "artisan" },
                 })
             end
         end
@@ -135,7 +142,8 @@ ns.RegisterPush({
             local yards = dungeon.place and D.PlaceDistance(dungeon.place)
             if yards and yards <= ENTRANCE then
                 add({
-                    situation = ("repair:d%d:%d"):format(dungeon.mapID or 0, math.floor(percent / 10)), entry = dungeon, icon = dungeon,
+                    situation = ("repair:d%d:%d"):format(dungeon.mapID or 0, math.floor(percent / 10)),
+                    entry = dungeon, icon = dungeon,
                     anyway = true, level = ns.push.LOUD,
                     title = L["Repair before %s"]:format(dungeon.name),
                     text = L["Your gear is at %d %%; inside there is no repairer"]:format(percent),
@@ -149,7 +157,7 @@ ns.RegisterPush({
         if not repairer then return end
         local _, seen = Spot(repairer)
         add({
-            situation = ("repair:%d:%d"):format(repairer.npcID, math.floor(percent / 10)), entry = repairer, icon = repairer,
+            situation = ("repair:%d"):format(math.floor(percent / 10)), entry = repairer, icon = repairer,
             level = ns.push.MEDIUM,
             title = L["Repair: your gear is at %d %%"]:format(percent),
             text = L["%s is %d yd away"]:format(repairer.name, yards),
@@ -171,7 +179,7 @@ ns.RegisterPush({
         if not vendor then return end
         local _, seen = Spot(vendor)
         add({
-            situation = ("bags:%s:%d"):format(free <= FULL and "full" or "low", vendor.npcID), entry = vendor, icon = vendor,
+            situation = "bags:" .. (free <= FULL and "full" or "low"), entry = vendor, icon = vendor,
             level = free <= FULL and ns.push.MEDIUM or ns.push.QUIET,
             title = free == 1 and L["1 free bag slot"] or L["%d free bag slots"]:format(free),
             text = L["Sell at %s, %d yd away"]:format(vendor.name, yards),
@@ -204,17 +212,37 @@ ns.RegisterPush({
     end,
 })
 
--- Options rows (Compass.lua puts them on the page): nudges on/off, each level, the sound, each rule ("Never for this" switches its rule off here)
+-- Options rows (Core\Options.lua puts them on the page): nudges on/off, each level, the sound, each rule
+-- ("Never for this" switches its rule off here)
 local options = ns.options
+-- a level switched off takes what it shows away now (Evaluate does not run while "push" is off, so nothing else prunes)
+local function Silence(note, quiet)
+    return function(on)
+        if on then return end
+        if note then ns.push.Interrupt() end
+        if quiet then
+            wipe(ns.push.quiet)
+            ns.push.QuietChanged()
+        end
+    end
+end
 options[#options + 1] = { type = "header", label = L["Nudges"] }
-options[#options + 1] = { type = "checkbox", key = "push", label = L["Nudge me when something important comes up"], default = true,
-    tooltip = L["Speaks up by itself, rarely: only when something is worth a lot, may be missed now, rests on sure facts and is new to you, and only in a pause (not in a fight)."] }
-options[#options + 1] = { type = "checkbox", key = "pushQuiet", label = L["Quiet: the minimap button glows"], default = true,
-    tooltip = L["The suggestions window's tab gets a dot until you look at it."] }
-options[#options + 1] = { type = "checkbox", key = "pushMedium", label = L["Medium: a short note by the minimap"], default = true,
+options[#options + 1] = { type = "checkbox", key = "push",
+    label = L["Nudge me when something important comes up"], default = true,
+    onChange = Silence(true, true),
+    tooltip = L["Speaks up by itself, rarely: only when something is worth a lot, may be missed now, rests on " ..
+        "sure facts and is new to you, and only in a pause (not in a fight)."] }
+options[#options + 1] = { type = "checkbox", key = "pushQuiet",
+    label = L["Quiet: the minimap button glows"], default = true,
+    onChange = Silence(false, true),
+    tooltip = L["The recommendations window's tab gets a dot until you look at it."] }
+options[#options + 1] = { type = "checkbox", key = "pushMedium",
+    label = L["Medium: a short note by the minimap"], default = true,
     tooltip = L["It fades after a few seconds. Switched off, these nudges come quietly."] }
 options[#options + 1] = { type = "checkbox", key = "pushLoud", label = L["Loud: a note on the screen"], default = true,
-    tooltip = L["Only for what is now or never (a rare nearby, repairing before a dungeon). Switched off, these come as a medium note."] }
+    onChange = Silence(true, false),
+    tooltip = L["Only for what is now or never (a rare nearby, repairing before a dungeon). Switched off, these " ..
+        "come as a medium note."] }
 options[#options + 1] = { type = "checkbox", key = "pushSound", label = L["Loud nudges with a sound"], default = true }
 for _, rule in ipairs(ns.push.rules) do
     options[#options + 1] = { type = "checkbox", key = "push_" .. rule.key, label = rule.label, default = true }

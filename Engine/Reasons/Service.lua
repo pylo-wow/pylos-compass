@@ -23,20 +23,26 @@ local function Worst()
     return worst
 end
 
--- free slots of the plain bags (bag family 0: not quivers, ammo pouches, soul or herb bags, whose room is no room for loot)
+-- free slots of the plain bags (bag family 0: not quivers, ammo pouches, soul or herb bags, whose room is no room for
+-- loot)
 local function FreeSlots()
     local free = 0
-    local Count = C_Container and C_Container.GetContainerNumFreeSlots or GetContainerNumFreeSlots
-    if not Count then return 99 end
     for bag = 0, 4 do
-        local count, family = Count(bag)
+        local count, family = C_Container.GetContainerNumFreeSlots(bag)
         if (family or 0) == 0 then free = free + (count or 0) end
     end
     return free
 end
 
--- (the nudges read the same, Pushes.lua)
+-- the nudges read the same (Pushes.lua)
 ns.service = { Worst = Worst, FreeSlots = FreeSlots }
+
+-- what this NPC is due for: the repair and the selling strength (0: not due or not his role); a repairer who also
+-- sells is worth the larger
+local function Due(entry)
+    return repair and D.NPCHasRole(entry, ROLE.REPAIR) and repair or 0,
+        sell and D.NPCHasRole(entry, ROLE.VENDOR) and sell or 0
+end
 
 ns.RegisterReason({
     key = "service",
@@ -52,15 +58,16 @@ ns.RegisterReason({
         sell = free <= 0 and 1 or free <= FULL and 0.5 or nil
     end,
     test = function(entry)
-        if repair and D.NPCHasRole(entry, ROLE.REPAIR) then return repair end
-        if sell and D.NPCHasRole(entry, ROLE.VENDOR) then return sell end
-        return nil
+        local mend, sale = Due(entry)
+        local strength = math.max(mend, sale)
+        return strength > 0 and strength or nil
     end,
-    -- the worse, the less distance counts: worn 0.45, badly worn or full
-    -- bags 0.6, broken 0.9 (a broken piece gives you nothing)
+    -- the worse, the less distance counts: worn 0.45, badly worn or full bags 0.6, broken 0.9 (a broken piece gives you
+    -- nothing)
     urgent = function(_, strength) return math.min(0.9, 0.3 + 0.3 * strength) end,
     note = function(entry)
-        if repair and D.NPCHasRole(entry, ROLE.REPAIR) then
+        local mend, sale = Due(entry)
+        if mend >= sale then
             return { icon = 136465, tip = L["Repairs: your gear is badly worn"] } -- Interface\Minimap\Tracking\Repair
         end
         return { icon = 133633, tip = L["Buys: your bags are almost full"] } -- Interface\Icons\INV_Misc_Bag_08

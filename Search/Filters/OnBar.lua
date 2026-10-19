@@ -26,10 +26,10 @@ local function HasKey(slot)
     return command ~= nil and GetBindingKey(command) ~= nil
 end
 
+-- of two slots holding the same spell or item, the one with a key bound counts (else the first)
 local function Better(old, new)
     return old == nil or (not HasKey(old) and HasKey(new))
 end
-
 
 local function Scan()
     wipe(spellsOnBar)
@@ -48,7 +48,6 @@ local function Scan()
     end
     dirty = false
 end
-
 
 -- Where an entry lies on the action bars: false if on none; else the key of its button, shortened as on
 -- the bar ("s-X"), or "" if the button has no key

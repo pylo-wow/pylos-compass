@@ -23,6 +23,21 @@ For WoW Forever (Interface 16001). Needs no other addon. Pylos GatherInfo is opt
 - **Left-click the minimap button** or `/pcompass`: the search. **Middle-click:** the recommendations. **Right-click** or `/pcompass options`: the options (in the game options under *AddOns*, *Pylos Compass*).
 - Both parts have a switch in the options; switched off, a part does nothing and costs nothing.
 
+## Source layout
+
+| Folder | Holds |
+|---|---|
+| `Kit\`, `UI\Kit\` | shared code of the Pylos addons: options page, saved variables, minimap button, widgets |
+| `Core\` | namespace, events, maps, game state, background builder, saved data, the options page and the global API |
+| `Data\` | generated game data; never edited by hand (see `SOURCES.md`) |
+| `World\` | the game's domains (spells, items, NPCs, quests, ...) on top of `Data\`, and what is learned while playing |
+| `You\` | the current character: zone, bags, quest log, flight points, hearthstone, class and ratings |
+| `Engine\` | what is worth doing or looking up: reasons, memory, learning, the item valuer |
+| `Search\` | the search bar: sources (one per category), links, filters, tools, UI |
+| `Advice\` | the recommendations window and the nudges |
+
+`PylosCompass.toc` lists the files in load order, one block per folder.
+
 ## Licence
 
 GPL-3.0-or-later. Where the data comes from is listed in `SOURCES.md`. World of Warcraft and its data belong to Blizzard Entertainment; this addon is not made or endorsed by Blizzard.

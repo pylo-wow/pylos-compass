@@ -8,7 +8,7 @@ local L = ns.L
 --          row carries it (via)
 --   npcs   a vendor that sells one of them (its symbol on the row)
 
-local low = {} -- item ID -> how many left; per search
+local low = {} -- item ID -> how many left; see prepare
 local VENDOR = D.NPC_ROLE.VENDOR
 
 -- the first item a vendor sells that you run low on
@@ -39,7 +39,7 @@ local TESTS = {
 
 ns.RegisterReason({
     key = "restock",
-    -- weight 0.8: you can play on a while without it, unlike with broken gear or full bags (service)
+    -- weight 0.8: you can play on a while without it, unlike with broken gear or full bags (Service.lua)
     stage = "play", weight = 0.8, label = "Restock",
     sources = { "items", "npcs" },
     depends = { "bags", "rec:memory", "npcs", "data" },
@@ -53,14 +53,14 @@ ns.RegisterReason({
         if not factor then return ns.reach.TRAVEL, nil end
         return factor, L["sold by %s"]:format(vendor.name) .. ", " .. words
     end,
+    -- distance counts half (the square root); none left: less still
+    urgent = function(_, strength) return strength > 1 and 0.65 or 0.5 end,
     -- an item: its vendor's row stands for it in the list of all
     via = function(entry)
         if entry.domain ~= "items" then return nil end
         local _, _, vendor = Vendor(entry.itemID)
         return vendor and D.EntryID(vendor) or nil
     end,
-    -- distance counts half (the square root); none left: less still
-    urgent = function(_, strength) return strength > 1 and 0.65 or 0.5 end,
     note = function(entry)
         if entry.domain == "items" then return L["Running low: %d left"]:format(low[entry.itemID] or 0) end
         local itemID = Sells(entry.npcID)

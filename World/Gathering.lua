@@ -2,7 +2,7 @@ local _, D = ...
 if D.off then return end
 
 -- Where gathered materials come from (Data\Gathering.lua: one source per item, surest first)
--- and herb/ore nodes (Data\Nodes.lua).
+-- and herb/ore nodes (Data\Nodes.lua, in the addons that have it).
 --   D.Gathering(itemID)  nil if unknown, else (built on first ask, shared, do not change):
 --     { kind = "mine" | "herb" | "skin" | "drop",
 --       skill = number,            mine/herb: required Mining/Herbalism skill

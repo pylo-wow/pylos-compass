@@ -1,10 +1,10 @@
 local _, D = ...
 
--- Tooltip lines, icons and categories for NPCs, quests and dungeons (entry.lines, entry.icon,
--- entry.category; quests also entry.iconPart and entry.iconColor), so every host shows the same.
--- entry.lines: list of { text, role, wrap }. The role names a style guide colour that the host
--- applies (UI\Kit\Widgets.lua: W.EntryText): "white" (default), "soft", "sub", "gold",
--- "blue" (places), "orange" (one faction only), "green" (done, ready).
+-- Texts and icons of NPCs, quests and dungeons: entry.lines of all three, entry.icon and
+-- entry.category of NPCs, entry.icon, entry.iconPart and entry.iconColor of quests.
+-- entry.lines: list of { text, role, wrap }. The role names a style guide color that
+-- W.EntryText (UI\Kit\Widgets.lua) applies: "white" (default), "soft", "sub", "gold",
+-- "blue" (places), "orange" (one faction only), "green" (done, ready). wrap: true wraps the line.
 -- A line { " " } is a gap.
 
 local DOT = D.DOT
@@ -16,7 +16,7 @@ local RANKS = { [1] = "Elite", [2] = "Rare elite", [3] = "Boss", [4] = "Rare" }
 local ROLES = { { 1, "Vendor" }, { 2, "Trainer" }, { 4, "Quest giver" }, { 8, "Flight master" },
     { 16, "Innkeeper" }, { 32, "Banker" }, { 64, "Auctioneer" }, { 128, "Repair" } }
 -- Icons by creature type (entry.creatureType) and role (first match wins, in ROLES order), for
--- NPCs without a portrait (a host draws entry.displayID where it can)
+-- NPCs without a portrait (the windows draw entry.displayID where they can)
 local TYPE_ICONS = { "Ability_Hunter_Pet_Wolf", "INV_Misc_Head_Dragon_01", "Spell_Shadow_SummonFelHunter",
     "Spell_Fire_Elemental_Totem", "Ability_Warrior_StrengthOfArms", "Spell_Shadow_RaiseDead", "INV_Misc_Head_Human_01",
     "Ability_Hunter_Pet_Crab", "INV_Misc_Gear_01" }
@@ -24,17 +24,17 @@ local ROLE_ICONS = { { 1, "INV_Misc_Coin_01" }, { 2, "INV_Misc_Book_09" }, { 4, 
     { 8, "Ability_Mount_MechaStrider" }, { 16, "INV_Misc_Bag_10_Blue" }, { 32, "INV_Misc_Coin_01" },
     { 64, "INV_Misc_Coin_01" }, { 128, "INV_Misc_Gear_01" } }
 
-D.fields.npcs.icon = function(entry)
+D.AddField("npcs", "icon", function(entry)
     local roles = entry.roles
     for _, role in ipairs(ROLE_ICONS) do
         if math.floor(roles / role[1]) % 2 == 1 then return "Interface\\Icons\\" .. role[2] end
     end
     return "Interface\\Icons\\" .. (TYPE_ICONS[entry.creatureType] or "INV_Misc_QuestionMark")
-end
-D.fields.npcs.category = function(entry)
+end)
+D.AddField("npcs", "category", function(entry)
     if entry.title ~= "" then return entry.title end
     return D.NPC_TYPE_NAMES[entry.creatureType] or ""
-end
+end)
 
 function D.NPCZoneNames(entry)
     local names = {}
@@ -87,7 +87,7 @@ local function ZoneText(entry)
     return first or others
 end
 
-D.fields.npcs.lines = function(entry)
+D.AddField("npcs", "lines", function(entry)
     local lines = {}
     if not entry.hasFacts then
         lines[1] = { "No data for this NPC yet (new in WoW Forever).", "sub", true }
@@ -109,33 +109,31 @@ D.fields.npcs.lines = function(entry)
     local zones = ZoneText(entry)
     if zones then lines[#lines + 1] = { zones, "blue", true } end
     return lines
-end
+end)
 
 local TAG = D.QUEST_TAG
 local TAG_NAMES = { [TAG.ELITE] = "Elite", [TAG.DUNGEON] = "Dungeon", [TAG.RAID] = "Raid", [TAG.PVP] = "PvP" }
 
 -- Icon: dungeon finder icons for dungeon/raid quests, else the quest log micro menu
--- exclamation mark cut from its file: iconPart = { file ID, left, right, top, bottom }.
--- The atlas ui-hud-micromenu-questlog-up-c60-2x is unknown to the client at run time (seen in
--- game); same numbers as W.QUEST_PART in UI\Kit\Widgets.lua: file 8200846 is 1024 x 512, the
--- cell from DB2 UiTextureAtlasMember x 397, y 169. Grey once done (iconColor tints the icon).
+-- exclamation mark cut from its file, as the atlas is unknown to the client at run time (W.QUEST_PART in
+-- UI\Kit\Widgets.lua): iconPart = { file ID, left, right, top, bottom }. Grey once done (iconColor tints the icon).
 local QUEST_ICON, DUNGEON_ICON, RAID_ICON = 134327, 136334, 136351 -- INV_Misc_Note_01, LFGIcon-Dungeon, -Raid
-local QUEST_PART = { 8200846, (397 + 4.5) / 1024, (397 + 58.5) / 1024, (169 + 13.5) / 512, (169 + 67.5) / 512 }
+local QUEST_PART = D.widgets.QUEST_PART
 local DONE_COLOR = { 0.45, 0.45, 0.45 }
 local function GroupQuest(entry) return entry.tag == TAG.RAID or entry.tag == TAG.DUNGEON or entry.dungeon ~= nil end
-D.fields.quests.icon = function(entry)
+D.AddField("quests", "icon", function(entry)
     if entry.tag == TAG.RAID then return RAID_ICON end
     if GroupQuest(entry) then return DUNGEON_ICON end
     return QUEST_ICON
-end
-D.fields.quests.iconPart = function(entry)
+end)
+D.AddField("quests", "iconPart", function(entry)
     if GroupQuest(entry) then return nil end
     return QUEST_PART
-end
-D.fields.quests.iconColor = function(entry)
+end)
+D.AddField("quests", "iconColor", function(entry)
     if C_QuestLog.IsQuestFlaggedCompleted(entry.questID) == true then return DONE_COLOR end
     return nil
-end
+end)
 
 -- "Level 10 (6-16)": quest level, from the minimum level to the last level it is not grey for
 function D.QuestLevelText(entry)
@@ -203,7 +201,7 @@ function D.QuestState(entry)
     return nil
 end
 
-local function ItemName(itemID) return D.itemNamesEN[itemID] or ("#" .. itemID) end
+local function ItemName(itemID) return D.itemNamesEN and D.itemNamesEN[itemID] or ("#" .. itemID) end
 local function NPCName(npcID) return D.npcNamesEN and D.npcNamesEN[npcID] or ("#" .. npcID) end
 local function QuestName(questID) return D.questNamesEN and D.questNamesEN[questID] or ("#" .. questID) end
 local function Count(name, count) return count > 1 and (name .. " ×" .. count) or name end
@@ -217,7 +215,7 @@ local OBJECTIVES = {
     m = function(_, count) return ("Bring %s"):format(D.Money(count)) end,
 }
 
-D.fields.quests.lines = function(entry)
+D.AddField("quests", "lines", function(entry)
     local lines = {}
     local head = D.QuestLevelText(entry)
     local tag = TAG_NAMES[entry.tag]
@@ -259,10 +257,12 @@ D.fields.quests.lines = function(entry)
     if kind or takerKind or entry.nextQuest then lines[#lines + 1] = { " " } end
     if kind == "npc" then lines[#lines + 1] = { Unchecked(("Given by %s"):format(NPCName(id)), origin), "soft" }
     elseif kind == "item" then lines[#lines + 1] = { ("Begins with %s"):format(ItemName(id)), "soft" } end
-    if takerKind == "npc" then lines[#lines + 1] = { Unchecked(("Turned in at %s"):format(NPCName(takerID)), takerOrigin), "soft" } end
+    if takerKind == "npc" then
+        lines[#lines + 1] = { Unchecked(("Turned in at %s"):format(NPCName(takerID)), takerOrigin), "soft" }
+    end
     if entry.nextQuest then lines[#lines + 1] = { ("Then: %s"):format(QuestName(entry.nextQuest)), "soft" } end
     return lines
-end
+end)
 
 D.DUNGEON_KINDS = { "Dungeon", "Raid" } -- entry.kind
 
@@ -283,7 +283,7 @@ function D.DungeonPlayersText(entry)
     if entry.kind == 2 and entry.players > 0 then return ("%d players"):format(entry.players) end
 end
 
-D.fields.dungeons.lines = function(entry)
+D.AddField("dungeons", "lines", function(entry)
     local lines = {}
     local what = D.DUNGEON_KINDS[entry.kind]
     local players = D.DungeonPlayersText(entry)
@@ -294,7 +294,8 @@ D.fields.dungeons.lines = function(entry)
     local zone = DungeonZone(entry)
     if zone then
         -- the entrance is the 1.12 data's until you walked in (Dungeons.lua)
-        lines[#lines + 1] = { Unchecked(("Entrance: %s"):format(zone), not entry.entranceSeen and "1.12" or nil), "blue" }
+        lines[#lines + 1] = {
+            Unchecked(("Entrance: %s"):format(zone), not entry.entranceSeen and "1.12" or nil), "blue" }
     end
     local bosses = D.DungeonBosses(entry)
     if #bosses > 0 then
@@ -303,4 +304,4 @@ D.fields.dungeons.lines = function(entry)
         for _, boss in ipairs(bosses) do lines[#lines + 1] = { boss[1] } end
     end
     return lines
-end
+end)

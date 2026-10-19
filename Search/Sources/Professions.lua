@@ -5,18 +5,18 @@ local D = ns.data
 -- Professions: the recipes of every profession, with the profession on the right. Learned ones show
 -- (Enter casts them); the others are hidden: typing finds those of your professions (greyed, with the
 -- skill they need), a filter like "Available" shows the ones you can learn now. Entries and recipe facts
--- come from Data (World\Professions.lua); here only how they are shown.
+-- come from the data layer (World\Professions.lua); here only how they are shown.
 
 -- fields the rows and the action need (a learned recipe is cast)
 D.AddField("professions", "type", function(entry) if not entry.hidden then return "spell" end end)
 D.AddField("professions", "value", function(entry) if not entry.hidden then return entry.spellID end end)
 
--- skill line -> profession name, in the client's language (also for the recipe links, Links\Recipes.lua)
+-- skill line -> profession name, in the client's language; ns.professionNames is read by Links\Recipes.lua
+-- (loaded after this file)
 local SKILLS = {}
 for skillLine, name in pairs(D.professionNames) do SKILLS[skillLine] = L[name] end
 ns.professionNames = SKILLS
 local SKILL_ICONS = D.professionIcons
-ns.professionIcons = SKILL_ICONS
 
 local skillLines = {}
 for skillLine in pairs(SKILLS) do skillLines[#skillLines + 1] = skillLine end
@@ -106,8 +106,8 @@ local function Describe(entry)
     return { profession }
 end
 
--- The colour a learned recipe has in the game's profession window (D.RecipeSkillColor) as RGB with its
--- kind ("orange", ...); used for the tooltip's "Raises your skill no more" (UI\Tooltip.lua, source.skillUp)
+-- The color a learned recipe has in the game's profession window (D.RecipeSkillColor) as RGB with its
+-- kind ("orange", ...); the row state and the tooltip's "For you" use it
 local SKILL_UP = {
     orange = { 1, 0.5, 0.25 }, yellow = { 1, 1, 0 }, green = { 0.25, 0.75, 0.25 }, grey = { 0.5, 0.5, 0.5 },
 }
@@ -118,7 +118,7 @@ local function SkillUp(entry)
 end
 
 -- Row state (UI\List.lua): a learned recipe how often you can make it with what you carry, in its skill
--- colour; one to come learnable now, or the skill it needs
+-- color; one to come learnable now, or the skill it needs
 local function State(entry)
     if not entry.hidden then
         local recipe = D.RecipeOf(entry.spellID, entry.skillLine)
@@ -134,7 +134,7 @@ local function State(entry)
 end
 
 -- Tooltip's For you (UI\Tooltip.lua): whether the item it makes is an upgrade; a learned recipe's chance
--- to raise your skill, in its skill colour
+-- to raise your skill, in its skill color
 local function ForYou(entry, add)
     local made = D.RecipeOf(entry.spellID, entry.skillLine)
     local upgrade = made and (made[1] or 0) ~= 0 and ns.rec.Upgrade(made[1])
@@ -151,26 +151,26 @@ local function ForYou(entry, add)
 end
 
 -- A profession's tab opened without text: your recipes of it, what you would look up most first, then
--- by colour (orange, yellow, green, grey) as the game's profession window, then A-Z.
-local COLOUR_ORDER = { orange = 1, yellow = 2, green = 3, grey = 4 }
+-- by color (orange, yellow, green, grey) as the game's profession window, then A-Z.
+local COLOR_ORDER = { orange = 1, yellow = 2, green = 3, grey = 4 }
 local source
-local learned, colours = {}, {}
-local function ByColour(a, b)
-    local ca, cb = colours[a], colours[b]
+local learned, colors = {}, {}
+local function ByColor(a, b)
+    local ca, cb = colors[a], colors[b]
     if ca ~= cb then return ca < cb end
     return nil
 end
 local function Browse(take)
     ns.rec.Prepare()
     wipe(learned)
-    wipe(colours)
+    wipe(colors)
     for _, entry in ipairs(source.index.entries) do
         if not entry.hidden then
             learned[#learned + 1] = entry
-            colours[entry] = COLOUR_ORDER[D.RecipeSkillColor(entry) or ""] or 5
+            colors[entry] = COLOR_ORDER[D.RecipeSkillColor(entry) or ""] or 5
         end
     end
-    for _, entry in ipairs(ns.rec.Sort(learned, ByColour)) do take(entry) end
+    for _, entry in ipairs(ns.rec.Sort(learned, ByColor)) do take(entry) end
 end
 
 -- The profession's own spells that open its window (its ranks, named like the profession:
@@ -184,24 +184,23 @@ end
 
 source = ns.RegisterSource({
     key = "professions",
-    leaveOut = WindowSpell,
     domain = "professions",
-    browse = Browse,
-    beforeSearch = function() yours = D.ProfessionRanks() end,
-    overview = "bars",
-    overviewEntries = OverviewEntries,
-    -- an unlearned recipe: findable by typing if you have the profession; specialisations (skill 0) are no
-    -- recipes, but one a recipe item teaches is (Forever's Fishing recipes have no skill in the data)
-    findable = function(entry)
-        return yours[entry.skillLine] ~= nil and (entry.skill > 0 or (entry.recipeItem or 0) ~= 0)
-    end,
     name = L["Professions"],
     hint = L["Search professions"],
     icon = 2447783, -- the crossed tools of WoW Forever's character window tabs (seen in game)
     actionLabel = L["cast"],
     owned = function(entry) return not entry.hidden end,
+    -- an unlearned recipe: findable by typing if you have the profession; specialisations (skill 0) are no
+    -- recipes, but one a recipe item teaches is (Forever's Fishing recipes have no skill in the data)
+    findable = function(entry)
+        return yours[entry.skillLine] ~= nil and (entry.skill > 0 or (entry.recipeItem or 0) ~= 0)
+    end,
+    leaveOut = WindowSpell,
+    beforeSearch = function() yours = D.ProfessionRanks() end,
+    overview = "bars",
+    overviewEntries = OverviewEntries,
+    browse = Browse,
     describe = Describe,
     state = State,
-    skillUp = SkillUp,
     forYou = ForYou,
 })

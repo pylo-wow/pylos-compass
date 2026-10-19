@@ -1,12 +1,12 @@
-local addonName, D = ...
+local _, D = ...
 
--- Pylos Compass: Data (Core, You, World, Data, Engine), the search (Search) and the recommendations (Advice) in one
--- addon. D is the root namespace; Kit\Kit.lua (first in the TOC) has given it L, kit and, once the options are
--- built, db and the minimap button.
+-- The namespaces of the parts. D is the root namespace; Kit\Kit.lua and UI\Kit\Widgets.lua (first in the TOC)
+-- have given it L, kit, widgets and, once the options are built, db, SetAlert and the minimap button.
 --   D.search   the search's namespace   D.advice   the recommendations' namespace
 -- A part reads the kit's names from the root and, for the recommendations, the engine's names as its own.
 
-PylosCompass = { API = 1, internal = D } -- Compass.lua fills it; Bindings.xml calls it; internal: the whole namespace, for Pylos Dev only
+-- The global API: Options.lua fills in the rest, Bindings.xml calls it; internal is the root D, for developer tools.
+PylosCompass = { API = 1, internal = D }
 
 local KIT = { L = true, db = true, kit = true, widgets = true, SetOption = true, minimapButton = true,
     SetAlert = true, GetColor = true, IsModifierHeld = true }

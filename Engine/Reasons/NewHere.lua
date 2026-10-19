@@ -20,7 +20,7 @@ local KINDS = {
 }
 
 local arrived = {} -- zone -> time() you came the first time (this session)
-local zone        -- your zone; per search
+local zone        -- your zone; see prepare
 
 local function Look()
     local db = ns.db
@@ -58,8 +58,8 @@ ns.RegisterReason({
     stage = "know", weight = 0.9, label = "New zone",
     kind = "know",
     sources = { "npcs", "dungeons" },
-    depends = { "zone", "npcs", "data" }, -- (fading with time: kept at most STALE seconds, Reasons.lua)
-    -- (the zone looked at here too: the state's listener runs a frame later)
+    depends = { "zone", "npcs", "data" }, -- fades with time: kept at most STALE seconds (Reasons.lua)
+    -- the zone is looked at here too: the state's listener runs a frame later
     prepare = function()
         Look()
         zone = D.PlayerZone()

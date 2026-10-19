@@ -10,7 +10,7 @@ local _, D = ...
 --   D.MapUp(mapID, mapType) the map of a type (3 zone, 2 continent) a map lies in, climbing up from a district or cave
 --   D.ZoneOfMap(mapID)      the zone a map lies in (cached)
 --   D.Decay(value, seconds, halfLife)  value after seconds, halving every halfLife seconds
---   D.YardsMinutes(yards, speed)  minutes to walk that far (path = straight line * DETOUR), at your foot speed unless given
+--   D.YardsMinutes(yards, speed)  minutes to walk that far (straight line * DETOUR), at RUN speed unless one is given
 -- Walking numbers: RUN 7 yd/s (vmangos baseMoveSpeed; GetUnitSpeed("player") in game); DETOUR 1.3 is a guess
 -- (nothing measures foot paths, and walked times must not be learned: the player can skew them).
 
@@ -41,7 +41,7 @@ function D.PlayerPlace(mapID)
     return D.Place(mapID, D.PositionXY(pos))
 end
 
--- x, y of a client position (a vector; a pair in older APIs); nil if none or secret (hence not "pos.x or pos[1]")
+-- x, y of a client position (a vector; a { x, y } pair also works); nil if none or secret (hence not "pos.x or pos[1]")
 function D.PositionXY(pos)
     local x, y = pos.x, pos.y
     if Secret(x) or Secret(y) then return nil end
@@ -58,15 +58,13 @@ local function MapSize(mapID)
     local size = mapSizes[mapID]
     if size ~= nil then return size end
     size = false
-    if C_Map.GetMapWorldSize then
-        local width, height = C_Map.GetMapWorldSize(mapID)
-        if width and width > 0 and height and height > 0 then size = { width, height } end
-    end
-    if not size and C_Map.GetWorldPosFromMapPos and CreateVector2D then
+    local width, height = C_Map.GetMapWorldSize(mapID)
+    if width and width > 0 and height and height > 0 then size = { width, height } end
+    if not size then
         local _, a = C_Map.GetWorldPosFromMapPos(mapID, CreateVector2D(0, 0))
         local _, b = C_Map.GetWorldPosFromMapPos(mapID, CreateVector2D(1, 1))
         if a and b then
-            local width, height = math.abs(a.y - b.y), math.abs(a.x - b.x)
+            width, height = math.abs(a.y - b.y), math.abs(a.x - b.x)
             if width > 0 and height > 0 then size = { width, height } end
         end
     end
@@ -82,7 +80,7 @@ function D.PlaceDistance(place)
     local positions = here.Get()
     local pos = positions[mapID]
     if pos == nil then
-        pos = C_Map.GetPlayerMapPosition and C_Map.GetPlayerMapPosition(mapID, "player") or false
+        pos = C_Map.GetPlayerMapPosition(mapID, "player") or false
         positions[mapID] = pos
     end
     local size = pos and MapSize(mapID)

@@ -1,8 +1,8 @@
 local ns = select(2, ...).search
-local D = ns.data
 local L = ns.L
+local D = ns.data
 
--- NPC links (Data: D.DropsOf, D.Sells and the reverse; 1.12 data plus what was learned in play): what an
+-- NPC links (D.DropsOf, D.Sells and the reverse; 1.12 data plus what was learned in play): what an
 -- NPC drops (with chance) and sells, and for an item which NPCs drop or sell it. NPCs come from the NPCs
 -- category's index: while it is switched off or not built, these links show nothing.
 
@@ -55,7 +55,7 @@ ns.RegisterLink({
             local count = 0
             for _ in (D.SoldBy(itemID) or ""):gmatch("%d+") do count = count + 1 end
             -- price for one (below on the right), with this vendor's discount where known
-            local price = D.PriceAt and D.PriceAt(itemID, entry.npcID)
+            local price = D.PriceAt(itemID, entry.npcID)
             local item = LinkedItem(itemID, price and D.Money(price) or "")
             vendors[item] = count
             list[#list + 1] = item
@@ -104,7 +104,7 @@ ns.RegisterLink({
         local list, unchecked = {}, {}
         local text = entry.itemID and D.SoldBy(entry.itemID)
         for id in (text or ""):gmatch("%d+") do
-            local price = D.PriceAt and D.PriceAt(entry.itemID, tonumber(id))
+            local price = D.PriceAt(entry.itemID, tonumber(id))
             local npc = LinkedNPC(tonumber(id), price and D.Money(price) or "")
             if npc then
                 local into = FromData(npc.npcID, "sells") and unchecked or list

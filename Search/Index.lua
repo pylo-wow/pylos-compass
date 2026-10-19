@@ -1,22 +1,22 @@
 local ns = select(2, ...).search
 
 -- The search index of every source, and the search.
--- Search runs on every keystroke. Measured with 100,000 entries: scanning all took up to 26 ms per key; the tiers
--- below take 0.035 ms for names starting with the query, under 2 ms worst case. Stops at SEARCH_LIMIT found:
+-- A search runs on every keystroke, so it does not scan all entries (too slow for 100,000). The tiers below
+-- gather candidates and stop at SEARCH_LIMIT found:
 -- 1. name starts with the query (entries sorted by name, binary search); 2. a word of the name starts with it
 -- (sorted list of word starts); 3. name contains it (only entries holding the query's rarest character pair);
--- 4. category contains it, 4b. an extra word (Data's entry.searchWords: an NPC's role, a dungeon's short
+-- 4. category contains it, 4b. an extra word (entry.searchWords: an NPC's role, a dungeon's short
 -- name) starts with it; 3b. several words (or a plural, a leading "the") in any order, then written together
 -- ("dead mines" -> deadmines); 5. hardly anything found: names one typo away (NearFrom).
--- A source's index: entries (Data's list of its domain, sorted by key = name as searched), wordStarts (every
--- word start after the first word as entry position * 256 + start byte, sorted by the text from there on),
--- pairs (character pair -> packed positions of the entries holding it, in name order, see PackPositions),
+-- A source's index: entries (the data layer's list of its domain, sorted by key = name as searched), wordStarts
+-- (every word start after the first word as entry position * 256 + start byte, sorted by the text from there
+-- on), pairs (character pair -> packed positions of the entries holding it, in name order, see PackPositions),
 -- categories (lower-case category -> packed positions), extraWords (distinct searchWords, sorted) with
 -- extraOf (word -> packed positions) and extraText (entry -> searchWords), and the domain's maps byID (item
 -- ID -> entry), byNPC (NPC ID -> entry), byEntryID (ns.EntryID -> entry; not for items and NPCs).
 -- The tiers only gather candidates (up to SEARCH_LIMIT per source, plus a source's pool and what you chose
--- before for this text); Rank.lua scores and sorts them. Built after Data built the domain: small sources in
--- one go behind the loading screen, big ones in Data's background builder.
+-- before for this text); Rank.lua scores and sorts them. Built after the data layer built the domain: small
+-- sources in one go, big ones in the data layer's background builder.
 
 local D = ns.data
 local EachChar, SearchKey = ns.EachChar, ns.SearchKey
@@ -24,7 +24,7 @@ local SEARCH_LIMIT = ns.SEARCH_LIMIT
 local byte, sub, find = string.byte, string.sub, string.find
 ns.index = {}
 
--- Packs entry positions (up to 16,777,215) into a string, three bytes each (a list of numbers took 16 bytes per position)
+-- Packs entry positions (up to 16,777,215) into a string, three bytes each: far smaller than a list of numbers
 local bytes, chunks = {}, {}
 local function PackPositions(list)
     wipe(chunks)
@@ -52,7 +52,7 @@ local function Note(map, key, entry)
     list[#list + 1] = entry
 end
 
--- the index's ID maps are Data's (D.ItemByID, D.NPCByID, D.EntryByID), filtered to the source's own domain
+-- the index's ID maps are the data layer's (D.ItemByID, D.NPCByID, D.EntryByID), filtered to the source's own domain
 local function MapOf(lookup, domain)
     return setmetatable({}, { __index = function(_, id)
         local entry = lookup(id)
@@ -60,9 +60,10 @@ local function MapOf(lookup, domain)
     end })
 end
 
--- Builds a source's index from its domain's list (sorted by key there). Pause() yields to the next frame in the background.
+-- Builds a source's index from its domain's list (sorted by key there). In the background Pause() yields to
+-- the next frame.
 local function BuildSource(source, Pause)
-    if not D.Built(source.domain) then return end -- Data has not built it yet
+    if not D.Built(source.domain) then return end -- the domain is not built yet
     local entries = D.Entries(source.domain)
     local wordStarts, wordTexts, pairsOf, categories, seenPairs = {}, {}, {}, {}, {}
     local extraWords, extraOf, extraText = {}, {}, {}
@@ -77,7 +78,7 @@ local function BuildSource(source, Pause)
             end
             space = find(key, " ", space + 1, true)
         end
-        -- character pairs, each once per entry, walked byte by byte (a gmatch and a string per pair were most of the build's garbage)
+        -- character pairs, each once per entry, walked byte by byte (no gmatch, little garbage)
         wipe(seenPairs)
         local lastFrom, lastTo
         local at, length = 1, #key
@@ -106,10 +107,10 @@ local function BuildSource(source, Pause)
         end
         local categoryKey = entry.categoryKey
         if categoryKey and categoryKey ~= "" then Note(categories, categoryKey, i) end
-        -- extra words Data gives an entry (an NPC's role "flight master", a dungeon's "bfd"), each like a category
+        -- extra words of an entry (an NPC's role "flight master", a dungeon's "bfd"), each like a category
         local searchWords = entry.searchWords
         if searchWords and searchWords ~= "" then
-            extraText[entry] = searchWords -- Data recomputes the field on each read
+            extraText[entry] = searchWords -- the field is recomputed on each read
             for word in searchWords:gmatch("%S+") do
                 local list = extraOf[word]
                 if not list then extraWords[#extraWords + 1] = word end
@@ -137,8 +138,7 @@ local function BuildSource(source, Pause)
 end
 ns.index.Build = BuildSource
 
--- Background building in Data's builder (one budget per frame for every addon), after its domain.
-local function NoPause() end
+-- Big sources are built in the data layer's background builder (one time budget per frame), after their domain.
 local function RefreshOpen()
     local S = ns.state
     if ns.ui.bar:IsShown() and not S.closingAt and not S.detail and not S.linked then
@@ -151,23 +151,24 @@ local function Big(source) return D.DomainInBackground(source.domain) end
 function ns.index.Rebuild(source)
     D.Background("index:" .. source.key, function(Pause)
         BuildSource(source, Pause)
-        if ns.db and ns.db["source_" .. source.key] == false then source.index = nil end
+        -- switched off while queued or building (the source, or the whole search)
+        if ns.db and (ns.db.searchOn == false or ns.db["source_" .. source.key] == false) then source.index = nil end
         RefreshOpen()
     end)
 end
 
 -- Builds what is missing of the switched-on sources: small ones at once, big ones in the
--- background. Until they are done, the search goes without them.
+-- background. Until a source is built, the search goes without it.
 function ns.index.BuildMissing()
     local active = ns.ActiveSources()
-    for _, source in ipairs(active) do D.Need(source.domain, "PylosCompass", true) end
+    for _, source in ipairs(active) do D.Need(source.domain, "search", true) end
     D.BuildMissing() -- small domains at once (their index follows in OnBuilt below)
     for _, source in ipairs(active) do
         if not source.index and not D.Waiting("index:" .. source.key) then
             if Big(source) then
                 ns.index.Rebuild(source) -- queued after its domain
             elseif D.Built(source.domain) then
-                BuildSource(source, NoPause)
+                BuildSource(source, D.NoPause)
             end
         end
     end
@@ -179,19 +180,18 @@ D.OnBuilt(function(key)
             if Big(source) then
                 ns.index.Rebuild(source)
             else
-                BuildSource(source, NoPause)
+                BuildSource(source, D.NoPause)
                 RefreshOpen()
             end
         end
     end
 end)
 
--- a source switched off gives its index free (and Data its domain's list, if no other addon needs it)
+-- a source switched off frees its index, and its domain's list when nothing else needs the domain
 function ns.index.Drop(source)
     source.index = nil
-    D.Need(source.domain, "PylosCompass", false)
+    D.Need(source.domain, "search", false)
 end
--- Search
 
 local best = {}       -- the shown results, best first
 local gathered = {}   -- candidates, before ranking
@@ -228,14 +228,13 @@ local function SameLook(entry)
     return false
 end
 local BROWSE_LIMIT = 400 -- limit for lists browsed without text (a zone's NPCs go up to 367)
-ns.index.suggested = {} -- entry -> true: a suggestion of the last search (below its heading, dimmed)
-ns.index.noted = {}     -- entry -> the text a browse gave an entry, or its strongest reason's (below on the right of its row)
-ns.index.browsed = false      -- the last list was a category's own, opened without text (source.browse)
-ns.index.browseHint = nil     -- what the browse returned: the text an empty list shows instead of the source's emptyHint
--- headings in a browsed list: rows that only label the ones below (UI\List.lua
--- draws them as a narrow gap; they cannot be marked), one per label
-local headings = {}   -- label -> its heading row
-local headingOf = {}  -- entry -> the label it was taken under
+ns.index.noted = {}      -- entry -> its note on the right of the details line: a browse's, or its strongest reason's
+ns.index.browsed = false -- the last list was a category's own, opened without text (source.browse)
+ns.index.browseHint = nil -- what the browse returned: the text an empty list shows instead of the source's emptyHint
+-- headings in a browsed list: rows that only label the ones below (UI\List.lua draws one as a narrow
+-- gap with its label; it cannot be marked), one per label
+local headings = {}  -- label -> its heading row
+local headingOf = {} -- entry -> the label it was taken under
 local function Heading(label)
     headings[label] = headings[label] or { header = true, name = label, key = "" }
     return headings[label]
@@ -277,16 +276,18 @@ local function WordStart(entries, start)
     return entries[math.floor(start / 256)], start % 256
 end
 
--- the text from a word start on (LowerBound's keyOf); reads the entries of the index searched now to avoid a closure per search
+-- the text from a word start on (LowerBound's keyOf); reads the entries of the index searched now, so no
+-- closure is made per search
 local startEntries
 local function WordStartKey(start)
     local entry, at = WordStart(startEntries, start)
     return entry.key:sub(at)
 end
 
--- Tier 4 went through every category of every source on each keystroke (NPCs alone have ~1,500 titles). Typing only adds
--- to the text and a category holding the longer text holds the shorter one, so the categories that held the last query are
--- all that can hold the next. index -> { query, matching keys }, weak keys; hits: the cache to use (words in any order keep their own).
+-- Tier 4 would go through every category of every source on each keystroke (NPCs alone have ~1,500 titles).
+-- Typing only adds to the text, and a category holding the longer text holds the shorter one, so the categories
+-- that held the last query are all that can hold the next. index -> { query, matching keys }, weak keys;
+-- hits: the cache to use (words in any order keep their own).
 local categoryHits = setmetatable({}, { __mode = "k" })
 local wordCategoryHits = setmetatable({}, { __mode = "k" })
 local function MatchingCategories(index, query, hits)
@@ -311,8 +312,8 @@ local function MatchingCategories(index, query, hits)
     return keys
 end
 
--- Filters set and nothing typed: the tiers walk the index in name order until SEARCH_LIMIT pass. A filter few entries pass
--- (Legendary, Rare NPCs) scanned all 19,224 items or 12,231 NPCs on every refresh (12 ms). Filters whose test reads only
+-- Filters set and nothing typed: the tiers walk the index in name order until SEARCH_LIMIT pass. A filter few
+-- entries pass (Legendary, Rare NPCs) would scan every item or NPC on each refresh. Filters whose test reads only
 -- the entry's own facts say static = true; their first passing positions are kept per index and set of filters.
 local staticFirst = setmetatable({}, { __mode = "k" }) -- index -> filter set key -> positions
 local staticKey -- the key of the filters set now if all are static, else nil
@@ -458,8 +459,8 @@ local function AllWords(entry)
     return true
 end
 
--- 3b. every word starts a word of the name, category or extra words, in any order; looked for among the entries where the
--- longest word starts the name or a word in it, is in the category or starts an extra word
+-- 3b. every word starts a word of the name, category or extra words, in any order; looked for among the entries
+-- where the longest word starts the name or a word in it, is in the category or starts an extra word
 local function Fits(entry) return not chosen[entry] and AllWords(entry) and Take(entry) end
 local function ByWords(index)
     local entries, longest = index.entries, wordList[1]
@@ -530,7 +531,7 @@ local function GatherFrom(index, query)
     -- no text (filters only): every entry started with it, once is enough
     if length == 0 or taken >= SEARCH_LIMIT then return end
     if ByWordStart(index, query) then return end
-    -- a single character: only names and words starting with it (looking inside every name was too slow)
+    -- a single character: only names and words starting with it (inside every name would be too slow)
     local characters = 0
     for _ in EachChar(query) do characters = characters + 1 end
     if characters == 1 then return end
@@ -579,7 +580,7 @@ local function NearAt(key, s, query, n)
     return near
 end
 -- 3 if query is near the whole first word of key, 2 near a later one, 1 near a word's start, else nil.
--- A word's first letter counts as typed right ("hoger": Hogger, not Roger); checking more cost 4 ms a key.
+-- A word's first letter counts as typed right ("hoger": Hogger, not Roger); checking more is too slow.
 local function Near(key, query, n)
     local s, near, first = 1, nil, byte(query, 1)
     while s do
@@ -592,8 +593,8 @@ local function Near(key, query, n)
     return near
 end
 -- All names near a text, kept per index for the next keys: typing on only removes names, so while
--- the text starts with the kept one, its names are all there is to look at (scanning the pairs'
--- buckets took up to 4 ms a key). Index -> { query, names in name order }; weak keys.
+-- the text starts with the kept one, its names are all there is to look at (no scan of the pairs'
+-- buckets). Index -> { query, names in name order }; weak keys.
 local nearKept = setmetatable({}, { __mode = "k" })
 local seen = {} -- (an entry in both buckets: looked at once)
 local function NearNames(index, query)
@@ -701,7 +702,7 @@ end
 
 local offered = {} -- the filters a typed text asks for (below the results)
 
--- Searched in all: the best of every category stands within the first rows ("thorium" showed 31 items
+-- Searched in all: the best of every category stands within the first rows (else "thorium" lists 31 items
 -- before the first NPC). The list keeps its order until the rows left equal the categories whose best
 -- is still missing; those come then, best first. Categories, filters and near names are no category's best.
 local isHead, placed, mixed, headOf, present = {}, {}, {}, {}, {}
@@ -739,15 +740,16 @@ end
 
 -- The best SEARCH_LIMIT entries for a typed text, in the category scope (a source) or all switched-on
 -- sources, passing the filter tokens (Filter.lua), ranked (Rank.lua). First the categories and
--- subcategories the text asks for, the filters it asks for last. Without text: with filters everything
--- that passes, in a category its first entries, else nothing. The returned list is reused by the next search.
+-- subcategories the text asks for, the filters it asks for last. Without text: with filters what passes
+-- (ranked; a filter with a pool or an order lists all of it up to BROWSE_LIMIT, any other is cut at
+-- SEARCH_LIMIT), else a category's browse list or, outside a category, the start page. The returned list
+-- is reused by the next search.
 function ns.index.Search(text, scope, filters)
     filters = filters or {}
     local query = SearchKey(text)
     wipe(best)
     wipe(gathered)
     wipe(chosen)
-    wipe(ns.index.suggested)
     wipe(ns.index.noted)
     wipe(ns.index.near)
     wipe(offered)
@@ -757,7 +759,7 @@ function ns.index.Search(text, scope, filters)
         wipe(ns.rank.learnedNow)
         return best
     end
-    -- the reasons (the recommendations) read your level, skills and gear once
+    -- the engine reads your level, skills and gear once
     ns.rec.Prepare()
     local searches, pool
     passes, searches, pool, reveal = ns.filter.Prepare(filters)
@@ -781,23 +783,23 @@ function ns.index.Search(text, scope, filters)
             if source.beforeSearch then source.beforeSearch() end
         end
     end
-    -- a category that lists its own entries when nothing is typed (items: yours, then suggestions)
-    -- A filter marked refines (a quality) only narrows, it is no filter of its own
+    -- a subcategory or a filter marked refines (a quality) only narrows: it is no filter of its own
     local plainFilter = false
     for _, f in ipairs(filters) do
         if not f.subcategory and not f.refines then plainFilter = true end
     end
-    -- with a filter set only where the browse goes through everything anyway (browseFiltered: the
-    -- dungeons' order by level), else everything that passes, A-Z
+    -- a category that lists its own entries when nothing is typed; with a filter set only where the browse goes
+    -- through everything anyway (browseFiltered: the dungeons' order by level), else the entries that pass, ranked
     local browsed = query == "" and scope and scope.browse and searched[scope]
         and (not plainFilter or scope.browseFiltered)
     ns.index.browsed = browsed and true or false -- View.lua: passing over counts only there
     ns.index.browseHint = nil
     if browsed then
-        -- take(entry, heading, suggestion, note): the entry under that heading (nil: none), a suggestion
-        -- dimmed, a note on the right of its row; hidden entries (spells to learn) too, the source chose them
+        -- take(entry, heading): the entry under that heading (nil: none); hidden entries (spells to learn) too,
+        -- the source chose them. Past the limit nothing more is taken (the list is in the source's order).
         wipe(headingOf)
-        ns.index.browseHint = scope.browse(function(entry, heading, suggestion, note)
+        ns.index.browseHint = scope.browse(function(entry, heading)
+            if #gathered >= BROWSE_LIMIT then return false end
             if scope.leaveOut and scope.leaveOut(entry) then return false end
             if entry.hidden then
                 if chosen[entry] or (passes and not passes(entry)) then return false end
@@ -807,10 +809,7 @@ function ns.index.Search(text, scope, filters)
                 return false
             end
             headingOf[entry] = heading
-            if suggestion then ns.index.suggested[entry] = true end
-            -- no note given: the strongest reason's (Recommend.lua)
-            if note == nil then note = ns.rec.Mark(entry) end
-            ns.index.noted[entry] = note
+            ns.index.noted[entry] = ns.rec.Mark(entry) -- the strongest reason's note (Recommend.lua)
             return true
         end, filters)
         wipe(ns.rank.learnedNow)
@@ -821,13 +820,7 @@ function ns.index.Search(text, scope, filters)
             return ns.rank.StartPage(ns.MAX_RESULTS, best)
         end
         wipe(ns.rank.learnedNow) -- marks of the previous search would stay
-        if scope and scope.index then
-            for _, entry in ipairs(scope.index.entries) do
-                if #best >= SEARCH_LIMIT then break end
-                if not entry.hidden and not D.EventAway(entry) then best[#best + 1] = entry end
-            end
-        end
-        return best
+        return best -- a category not built yet
     end
     if query ~= "" then
         -- categories whose name starts with the query come first ("spe" + Tab)
@@ -836,9 +829,8 @@ function ns.index.Search(text, scope, filters)
                 if source.entry.key:sub(1, #query) == query then best[#best + 1] = source.entry end
             end
         end
-        -- the filters it asks for go below the results (they took the first row: "innkeeper" was the
-        -- filter Services); subcategories stay with the categories ("mining": Professions/Mining);
-        -- "#..." asks for filters only
+        -- the filters it asks for go below the results (else "innkeeper" lists the filter Services first);
+        -- subcategories stay with the categories ("mining": Professions/Mining); "#..." asks for filters only
         local hash = ns.filter.Suggest(query, filters, scope, offered)
         local plain = 0
         for _, entry in ipairs(offered) do
@@ -895,20 +887,20 @@ function ns.index.Search(text, scope, filters)
     elseif not browsed then
         ns.rank.Sort(gathered, text)
     end
-    -- entries that look the same in the list (name, icon, category; 442 item names have several IDs,
+    -- entries that look the same in the list (name, icon, category; some item names have several IDs,
     -- like two Dark Iron Ores) show once, the best ranked; variants that look different stay. An entry
     -- also shows once (a spell of the spell book that is a profession's too). The first entry of each
-    -- name is kept and only same-name entries compared (a string per candidate was garbage).
+    -- name is kept and only same-name entries are compared (no string per candidate).
     wipe(looks)
     wipe(looksByKey)
     wipe(looksMore)
-    local limit = (browsed or order) and BROWSE_LIMIT or SEARCH_LIMIT
+    local limit = (browsed or order or (pool and query == "")) and BROWSE_LIMIT or SEARCH_LIMIT
     -- in all with text: past the limit still the best of a category that
     -- has none in the list yet (Mix moves it up; "thorium": the quests)
     local mixing = query ~= "" and not scope
     wipe(present)
     -- without text, no NPC or quest of a world event not running now (typed, it is found, grey: its
-    -- row's state names the event); Data's D.EventAway
+    -- row's state names the event); D.EventAway
     local away = query == "" and D.EventAway
     for _, entry in ipairs(gathered) do
         local source = entry.source
@@ -944,7 +936,7 @@ function ns.index.Search(text, scope, filters)
     return best
 end
 
--- an entry by its ns.EntryID (Data's), if its category is built here (switched on, indexed)
+-- an entry by its ns.EntryID, if its category is built here (switched on, indexed)
 function ns.index.EntryByID(id)
     local entry = D.EntryByID(id)
     local source = entry and entry.source

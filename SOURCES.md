@@ -15,21 +15,22 @@ used here, as every interface add-on uses the game client's data, for a free
 user interface add-on of World of Warcraft. This addon is not made or
 endorsed by Blizzard Entertainment.
 
-## The game client's tables (WoW Forever, build 1.60.1.70291)
+## The game client's tables (WoW Forever)
 
 DB2 tables of the client, read as CSV from [wago.tools](https://wago.tools/db2)
-(build 1.60.1.70450): ItemSparse, Item, ItemClass/ItemSubClass, ItemEffect,
-ItemXItemEffect, ItemArmor*, ItemDamage*, RandPropPoints, ArmorLocation,
-SpellEffect, SpellReagents, SpellLevels, SpellName, SpellMisc, SpellDuration,
-SkillLine, SkillLineAbility, SkillRaceClassInfo,
-TraitDefinition, Map, MapDifficulty, Difficulty, GroupFinderActivity,
-DungeonEncounter, AreaTrigger, AreaTable, UiMap, UiMapAssignment,
-UiMapXMapArt, WorldMapOverlay, TaxiNodes, TaxiPath, TaxiPathNode, QuestXP,
-QuestFactionReward, QuestSort, ChrClasses, Lock. Files: ItemNames_enUS, ItemFacts,
-ItemStats, ClassSpells, Buffs, ProfessionSpells, OtherRecipes, Dungeons_enUS,
-NPCPlaces, TravelNet, QuestFacts, Gathering (Lock: the skill a node needs;
-UiMap and UiMapAssignment: the nodes' zones), Nodes (Lock: the skill a node needs), ItemPrices (with the client's hotfix rows of
-ItemSparse, `Cache\ADB\enUS\DBCache.bin`).
+(builds 1.60.1.70291 to 1.60.1.70450, as each data file's header says):
+ItemSparse, Item, ItemClass/ItemSubClass, ItemEffect, ItemXItemEffect,
+ItemArmor*, ItemDamage*, RandPropPoints, ArmorLocation, SpellEffect,
+SpellReagents, SpellLevels, SpellName, SpellMisc, SpellDuration, SkillLine,
+SkillLineAbility, SkillRaceClassInfo, TraitDefinition, Map, MapDifficulty,
+Difficulty, GroupFinderActivity, DungeonEncounter, AreaTrigger, AreaTable,
+UiMap, UiMapAssignment, UiMapXMapArt, WorldMapOverlay, TaxiNodes, TaxiPath,
+TaxiPathNode, QuestXP, QuestFactionReward, QuestSort, ChrClasses, Lock.
+Files: ItemNames_enUS, ItemFacts, ItemStats, ClassSpells,
+ProfessionSpells, OtherRecipes, Dungeons_enUS, NPCPlaces, TravelNet,
+QuestFacts, Gathering (Lock: the skill a node needs; UiMap and
+UiMapAssignment: the nodes' zones), ItemPrices (with the client's hotfix rows
+of ItemSparse, `Cache\ADB\enUS\DBCache.bin`).
 
 The client's caches of the server's answers (`Cache\WDB\enUS\creaturecache.wdb`,
 `questcache.wdb`, build 70291) and what the game answered the author's private
@@ -47,16 +48,13 @@ each quest and what it needs first (QuestLinks), and where gathered
 materials come from (Gathering: creature_template, creature,
 creature_loot_template, reference_loot_template, skinning_loot_template,
 gameobject_template, gameobject, gameobject_loot_template, item_template),
-where herb and ore nodes are and what they yield (Nodes:
-gameobject_template, gameobject, gameobject_loot_template,
-reference_loot_template),
 and which NPCs and quests come
 only with a world event such as Feast of Winter Veil (Events: game_event,
 game_event_creature, game_event_quest; whether an event runs comes from
 the game's calendar or its NPCs seen). Used only where the game
 itself does not tell; what is seen in play replaces it (below). Where a
 level, role, zone, dungeon entrance, drop, ware, quest giver or taker is
-still the 1.12 data's, the addons mark it "unchecked".
+still the 1.12 data's, the addon marks it "unchecked".
 
 vmangos is licensed under the GNU General Public License, version 2 or (at
 your option) any later version (GPL-2.0-or-later). Its copyright lines, as
@@ -126,15 +124,16 @@ instances in the data.
 ## Left out of the data
 
 Test and placeholder NPCs, items and quests are left out by name (the
-generators' hand fixes, each with its evidence). Since 2026-10-09 also test
-NPCs ("World ..." trainers and vendors, "Mage 20", titles with UNUSED, NYI,
-PTR) and NPCs without a role named like an item (summoned pets and mounts,
-herb-node placeholders), each only where no 1.12 spawn, no quest relation
-and no sighting in play shows them real; rank spells named like their
-profession that teach no skill (not recipes); unused variants of an item
-that has a used one of the same name, item class and use (sold, dropped,
-made or named by a quest); the second "Naxxramas" (map 2921, no group
-browser row: the raid 533 stays).
+generators' hand fixes, each with its evidence). Also left out:
+
+- test NPCs ("World ..." trainers and vendors, "Mage 20", titles with UNUSED,
+  NYI, PTR) and NPCs without a role named like an item (summoned pets and
+  mounts, herb-node placeholders), each only where no 1.12 spawn, no quest
+  relation and no sighting in play shows them real;
+- rank spells named like their profession that teach no skill (not recipes);
+- unused variants of an item that has a used one of the same name, item class
+  and use (sold, dropped, made or named by a quest);
+- the second "Naxxramas" (map 2921, no group browser row: the raid 533 stays).
 
 ## The engine's own numbers
 

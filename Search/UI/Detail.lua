@@ -13,7 +13,7 @@ local DOT, ROW_HEIGHT = W.DOT, W.ROW_HEIGHT
 
 local DETAIL_TOP, DETAIL_FOOT, DETAIL_ICON = 14, 66, 40
 local DETAIL_FADE = 0.15 -- seconds it fades in
-local WINDOW_GAP = 6
+local WINDOW_GAP = ui.WINDOW_GAP
 local detail = CreateFrame("Frame", nil, bar)
 detail:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, -WINDOW_GAP)
 detail:SetPoint("TOPRIGHT", bar, "BOTTOMRIGHT", 0, -WINDOW_GAP)
@@ -28,7 +28,7 @@ end)
 ui.detail = detail
 
 -- background art of list and detail view: { atlas, focusX, focusY, zoom, alpha } (focus: the motif's centre
--- as fractions of the picture; alpha for colourful pictures so the text stays readable), nil: none
+-- as fractions of the picture; alpha for colorful pictures so the text stays readable), nil: none
 function ui.SetArt(art)
     local info = art and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(art[1])
     for _, frame in ipairs({ list, detail }) do
@@ -42,8 +42,7 @@ end
 detail.icon = W.Icon(detail, DETAIL_ICON)
 detail.icon:SetPoint("TOPLEFT", 16, -DETAIL_TOP)
 
--- the icon takes the game's modified clicks like a bag icon (Ctrl+click tries on, Shift+click links into
--- chat: HandleModifiedItemClick); a right click opens its menu
+-- an entry's chat link: an item's (its "item:ID" stand-in while the item is not cached) or a spell's
 function ui.EntryLink(entry)
     if entry.itemID then
         return select(2, C_Item.GetItemInfo(entry.itemID)) or ("item:" .. entry.itemID)
@@ -59,7 +58,7 @@ detail.iconButton:SetPoint("TOPLEFT", detail, "TOPLEFT", 16, -DETAIL_TOP)
 detail.iconButton:SetSize(DETAIL_ICON, DETAIL_ICON)
 detail.iconButton:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 -- hovered: the action button's mouseover frame round the icon (atlas from UiTextureAtlasMember); the square
--- glow (drew a blue frame) only where the client lacks the atlas
+-- glow (it draws a blue frame) only where the client lacks the atlas
 local iconHover = detail.iconButton:CreateTexture(nil, "HIGHLIGHT")
 iconHover:SetPoint("TOPLEFT", detail.icon, "TOPLEFT", -2, 2)
 iconHover:SetPoint("BOTTOMRIGHT", detail.icon, "BOTTOMRIGHT", 3, -3)
@@ -68,6 +67,8 @@ if not W.Atlas(iconHover, "UI-HUD-ActionBar-IconFrame-Mouseover") then
     iconHover:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
     iconHover:SetBlendMode("ADD")
 end
+-- the icon takes the game's modified clicks like a bag icon (Ctrl+click tries on, Shift+click links into
+-- chat: HandleModifiedItemClick); a right click opens its menu
 detail.iconButton:RegisterForDrag("LeftButton")
 detail.iconButton:SetScript("OnDragStart", function() ui.Pickup(S.detail) end)
 detail.iconButton:SetScript("OnClick", function(_, button)
@@ -81,8 +82,6 @@ detail.tip = CreateFrame("GameTooltip", "PylosCompassDetailTooltip", detail, "Ga
 detail.tip:SetFrameStrata("TOOLTIP")
 detail.tip.noGatherInfo = true
 
-detail.info = detail:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-detail.info:SetPoint("BOTTOMLEFT", 18, 38)
 detail.id = detail:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 detail.id:SetPoint("BOTTOMRIGHT", -18, 39)
 
@@ -90,7 +89,7 @@ detail.keys = detail:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 detail.keys:SetPoint("BOTTOM", 0, 14)
 
 -- The head: the entry's row in large: right of the icon its details with the kind first ("Item · Metal & Stone"),
--- on the right its state for you in its colour and below it the reason (UI\List.lua ui.RowTexts); two lines
+-- on the right its state for you in its color and below it the reason (UI\List.lua ui.RowTexts); two lines
 -- with a reason, so it never covers the previews
 local HEAD_HEIGHT, HEAD_TWO = 20, 34
 detail.headHeight = HEAD_HEIGHT
@@ -295,13 +294,15 @@ function ui.RefillDetail()
     PlaceTooltip()
 end
 
+local HideCopy -- the copy field's (below)
+
 local headOpts = { mixed = true }
 function ui.RenderDetail(entry)
-    ui.HideCopy()
+    HideCopy()
     ui.ItemDetails(entry)
     list:Hide()
-    -- a list waiting for the opening bar (RenderList) must not come after it: opened straight at an entry
-    -- (PylosCompass.Show), the start page's list folded open over the detail view
+    -- a list waiting for the opening bar (RenderList) must not fold open over the detail view (opened straight
+    -- at an entry: PylosCompass.Show)
     list.pending = nil
     tip:Hide()
     W.ShowIcon(detail.icon, entry)
@@ -318,7 +319,6 @@ function ui.RenderDetail(entry)
     ui.FillTooltip(detail.tip, entry)
     PlaceTooltip()
 
-    detail.info:SetText("")
     detail.previewHeight = RenderPreviews(entry)
 
     local id = entry.itemID or entry.spellID or entry.npcID or entry.questID or entry.mapID
@@ -343,8 +343,9 @@ function ui.RenderDetail(entry)
     ui.CheckList() -- opening order: the detail view stands instead of the list
 end
 
--- Copy field: a text to copy (a web address) stands marked in a field over the keys line, with the keys
--- focus; Ctrl+C copies it and the field goes, Esc, Enter or a click elsewhere close it. Typing cannot change it.
+-- Copy field: a text to copy (a web address) stands marked in a field over the keys line, with the
+-- keyboard focus; Ctrl+C copies it and the field goes, Esc, Enter or a click elsewhere close it. Typing cannot
+-- change it.
 local COPIED_FOR = 0.6 -- seconds "Link copied" shows before the field goes
 local copy = CreateFrame("EditBox", nil, detail, "InputBoxTemplate")
 copy:SetHeight(22)
@@ -355,11 +356,10 @@ copy:SetFontObject("GameFontHighlightSmall")
 copy:Hide()
 ui.copy = copy
 
-function ui.HideCopy()
+function HideCopy()
     if not copy:IsShown() then return end
     copy:Hide() -- first: losing the focus calls this again
     copy:ClearFocus()
-    detail.info:Show()
     detail.id:Show()
     detail.keys:SetText(detail.keysText)
 end
@@ -371,7 +371,6 @@ function ui.ShowCopy(text)
     copy:SetFocus()
     copy:SetCursorPosition(0)
     copy:HighlightText()
-    detail.info:Hide()
     detail.id:Hide()
     detail.keys:SetText(L["Ctrl+C: copy"] .. DOT .. L["Esc: close"])
 end
@@ -387,11 +386,11 @@ copy:SetScript("OnKeyDown", function(_, key)
         detail.keys:SetText(L["Link copied"])
         -- the copying happens after this key script: the field goes a moment later
         C_Timer.After(COPIED_FOR, function()
-            if copy:IsShown() then ui.HideCopy() end
+            if copy:IsShown() then HideCopy() end
         end)
     end
 end)
-copy:SetScript("OnEscapePressed", ui.HideCopy)
-copy:SetScript("OnEnterPressed", ui.HideCopy)
-copy:SetScript("OnEditFocusLost", ui.HideCopy)
-detail:HookScript("OnHide", ui.HideCopy)
+copy:SetScript("OnEscapePressed", HideCopy)
+copy:SetScript("OnEnterPressed", HideCopy)
+copy:SetScript("OnEditFocusLost", HideCopy)
+detail:HookScript("OnHide", HideCopy)

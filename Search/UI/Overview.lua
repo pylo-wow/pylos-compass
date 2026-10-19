@@ -12,16 +12,17 @@ local Clamp = W.Clamp
 
 -- Value bars
 -- Like the game's skill window: dark ground, thin bronze border, the value as text in the middle
--- (bar.value). 15 px high: 12 cut the text off at the bottom.
-local BAR_HEIGHT = 15
+-- (bar.value). 15 px high: a lower bar cuts the text off at the bottom.
+local VALUE_BAR_HEIGHT = 15
 local GROUND_ALPHA = 0.6
+local MIN_FILL_WIDTH = 0.01 -- keeps the fill's width above 0
 local FILL = { 0.1, 0.32, 0.85 } -- the blue of the game's skill window
 local function Bar(parent)
     local bar = CreateFrame("StatusBar", nil, parent)
-    bar:SetHeight(BAR_HEIGHT)
+    bar:SetHeight(VALUE_BAR_HEIGHT)
     -- the own fill follows the bar's width (it is placed before it is sized)
     bar:SetScript("OnSizeChanged", function(self)
-        if self.fraction then self.art:SetWidth(math.max(self:GetWidth() * self.fraction, 0.01)) end
+        if self.fraction then self.art:SetWidth(math.max(self:GetWidth() * self.fraction, MIN_FILL_WIDTH)) end
     end)
     bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
     local back = ui.Fill(bar, "BACKGROUND", 0, 0, 0, GROUND_ALPHA)
@@ -40,7 +41,7 @@ end
 -- one of the game's profession bars: an animation sheet of frames 856 x 34
 -- in two columns (skillbar_fill_flipbook_*), or the plain blue one
 -- (skillbar_fill_flipbook_defaultblue); its first frame, cut to the value,
--- stands in for the colour.
+-- stands in for the color.
 local FLIPBOOK_FRAME_HEIGHT = 34
 local FLIPBOOK_TWO_COLUMNS = 1500 -- a sheet this wide has two columns of frames
 -- WoW Forever's own bars (*_c60): the client does not know these atlas names at run time, though they are in
@@ -76,7 +77,7 @@ local function FillBar(bar, data)
         local frameRight = left + (right - left) / columns
         bar.art:SetTexture(info.file or info.filename)
         bar.art:SetTexCoord(left, left + (frameRight - left) * fraction, top, top + (bottom - top) / rows)
-        bar.art:SetWidth(math.max(bar:GetWidth() * fraction, 0.01))
+        bar.art:SetWidth(math.max(bar:GetWidth() * fraction, MIN_FILL_WIDTH))
         bar.art:SetShown(fraction > 0)
         bar:SetStatusBarColor(0, 0, 0, 0)
         bar.fraction = fraction
@@ -91,6 +92,7 @@ end
 local OVERVIEW_LINES = 6 -- lines of cells shown at once: about the list's height
 ui.OVERVIEW_LINES = OVERVIEW_LINES
 local CELL_HEIGHT, CELL_GAP, OVERVIEW_PAD = 46, 10, 10
+local CELL_SPACING = 4 -- a cell is this much lower than its line
 local CELL_ICON = 32
 local CELL_TIME, CELL_STAGGER = 0.2, 0.025
 
@@ -130,7 +132,7 @@ local function Cell(i)
     local cell = cells[i]
     if cell then return cell end
     cell = CreateFrame("Button", nil, overview)
-    cell:SetHeight(CELL_HEIGHT - 4)
+    cell:SetHeight(CELL_HEIGHT - CELL_SPACING)
     cell.ease, cell.offset = 1, 0
     cell.highlight = W.Highlight(cell)
     cell.highlight:Hide()

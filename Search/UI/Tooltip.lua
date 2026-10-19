@@ -9,9 +9,12 @@ local W = ns.widgets
 local ui = ns.ui
 local tip = ui.tip
 
--- An item whose data is not loaded shows only the name or "retrieving item information" and does not update by itself
--- (waiting for GET_ITEM_INFO_RECEIVED did not help, confirmed in game): the tooltip is filled again five times a second.
+-- An item whose data is not loaded shows only the name or "retrieving item information" and does not update by
+-- itself (waiting for GET_ITEM_INFO_RECEIVED did not help, confirmed in game): the tooltip is filled again
+-- five times a second.
 local REFILL_EVERY = 0.2
+local REFILL_FOR = 2 * W.TOOLTIP_WAIT -- an item that never loads is left as it is after this long
+local refilling -- the watcher is filling again (not a new fill: its time starts)
 local function Retrieving(tooltip)
     if tooltip.pendingItem then return not C_Item.IsItemDataCachedByID(tooltip.pendingItem) end
     local first = _G[tooltip:GetName() .. "TextLeft1"]
@@ -19,20 +22,23 @@ local function Retrieving(tooltip)
     return text ~= nil and RETRIEVING_ITEM_INFO ~= nil and text:find(RETRIEVING_ITEM_INFO, 1, true) ~= nil
 end
 
--- the watcher: shown only while a tooltip waits for its item's data (otherwise it ran every frame)
+-- the watcher: shown only while a tooltip waits for its item's data
 local watch, nextCheck = CreateFrame("Frame", nil, ui.bar), 0
 watch:Hide()
 local function Watch() watch:Show() end
 
--- Blocks below an entry's own lines, the same in every category: "For you" (source.forYou: bags, learnable, skill up,
--- progress, hotkey) and "Why" (why a suggestion is listed). Where to get it is no block; the menu's links list them all.
--- Each under a gold heading, left out when empty. A source adds a line with add(text, tone): an ns.TONES tone or a colour.
+-- Blocks below an entry's own lines, the same in every category: "For you" (source.forYou: bags, learnable,
+-- skill up, progress, hotkey) and "Why" (why a suggestion is listed). Where to get it is no block; the menu's
+-- links list them all. Each under a gold heading, left out when empty. A source adds a line with
+-- add(text, tone): an ns.TONES tone or a color.
 local GOLD, WHITE = W.GOLD, W.WHITE
 local blockLines = {}
 local function Block(tooltip, heading, fill, entry)
     wipe(blockLines)
     fill(entry, function(text, tone)
-        if text then blockLines[#blockLines + 1] = { text, ns.TONES[tone] or type(tone) == "table" and tone or WHITE } end
+        if text then
+            blockLines[#blockLines + 1] = { text, ns.TONES[tone] or type(tone) == "table" and tone or WHITE }
+        end
     end)
     if #blockLines == 0 then return end
     tooltip:AddLine(" ")
@@ -56,8 +62,9 @@ local function ForYou(entry, add)
     end
 end
 
--- A recipe's tooltip has the item it makes below it (beside it where there is no room); not where the game's recipe tooltip
--- shows the item already (same item twice; then whether it is an upgrade stands under For you, Sources\Professions.lua)
+-- A recipe's tooltip has the item it makes below it (beside it where there is no room); not where the game's
+-- recipe tooltip shows the item already (same item twice; then whether it is an upgrade stands under For you,
+-- Sources\Professions.lua)
 local made = CreateFrame("GameTooltip", "PylosCompassMadeTooltip", UIParent, "GameTooltipTemplate")
 made:SetFrameStrata("TOOLTIP")
 made.noGatherInfo = true
@@ -88,12 +95,14 @@ local function ShowMade(entry)
 end
 
 function ui.FillTooltip(tooltip, entry)
+    if not refilling then tooltip.fillSince = GetTime() end
     tooltip.pendingItem = nil
     if entry.itemID then
         C_Item.RequestLoadItemDataByID(entry.itemID)
         tooltip:SetItemByID(entry.itemID)
         tooltip.pendingItem = not C_Item.IsItemDataCachedByID(entry.itemID) and entry.itemID or nil
-        -- a trade good: where it is gathered, from Pylos GatherInfo if installed and the option is on (noGatherInfo stops its own hook)
+        -- a trade good: where it is gathered, from Pylos GatherInfo if installed and the option is on
+        -- (noGatherInfo stops its own hook)
         local gather = ns.db.gatherInfo and ns.GatherInfo()
         if gather and (not gather.Wanted or gather.Wanted()) then
             gather.AddLine(tooltip, entry.itemID)
@@ -101,12 +110,13 @@ function ui.FillTooltip(tooltip, entry)
     elseif entry.spellID then
         tooltip:SetSpellByID(entry.spellID)
     else
-        -- an entry of its own: its name (an NPC's in its reaction's colour) and Data's lines (World\Lines.lua)
+        -- an entry of its own: its name (an NPC's in its reaction's color) and its lines (World\Lines.lua)
         W.EntryText(tooltip, entry)
     end
     Block(tooltip, L["For you"], ForYou, entry.target or entry)
-    -- why it is here: every reason it has (strongest first; the row shows only the strongest) and your own use (Memory.lua),
-    -- under "Why" in white as in the suggestions window; only where it was suggested, not in a link's list or the detail view
+    -- why it is here: every reason it has (strongest first; the row shows only the strongest) and your own use
+    -- (Memory.lua), under "Why" in white as in the recommendations window; only where it was suggested, not in a
+    -- link's list or the detail view
     if not (S.linked or S.detail) and entry.source then
         local why = {}
         for i, line in ipairs(ns.rec.Explain(entry)) do why[i] = line end
@@ -114,7 +124,6 @@ function ui.FillTooltip(tooltip, entry)
         if ns.rank.learnedNow[entry] and S.query ~= "" then
             why[#why + 1] = L["You chose this for this search before"]
         elseif id and ns.rank.UsedNow()(id) >= 0.15 then
-            -- not "use": a recipe still to learn showed it
             why[#why + 1] = L["You come back to this often"]
         end
         W.AddWhy(tooltip, why)
@@ -123,8 +132,9 @@ function ui.FillTooltip(tooltip, entry)
     if Retrieving(tooltip) then Watch() end
 end
 
--- The marked result shows (selection bar, tooltip) once there is a reason: text typed, a key or the mouse moved over the list, a link's list.
--- Otherwise the first entry of a page opened without text would be marked with no mouse near; Enter still opens it after a key moved.
+-- The marked result shows (selection bar, tooltip) once there is a reason: text typed, a key or the mouse moved
+-- over the list, a link's list. Otherwise the first entry of a page opened without text would be marked with no
+-- mouse near; Enter still opens it after a key moved.
 function ui.MarkVisible()
     return S.query ~= "" or S.navigated or S.hovered or S.linked ~= nil
 end
@@ -154,14 +164,15 @@ function ui.MoveTip(atOnce)
     end
 end
 
--- An item whose data the client has not loaded showed "retrieving item information" first: its tooltip waits for the data
--- (rows request it when they show, List.lua), at most a moment, then shows what there is and fills in later.
+-- An item whose data the client has not loaded would show "retrieving item information": its tooltip waits for
+-- the data (rows request it when they show, List.lua), at most TOOLTIP_WAIT, then shows what there is and fills
+-- in later.
 local TOOLTIP_WAIT = W.TOOLTIP_WAIT
 
 function ui.ShowTooltip(entry)
     local list = ui.list
     list.tooltipWaiting = nil
-    -- not while the search closes (a menu line that closes it showed the tooltip again and it stayed)
+    -- not while the search closes (a menu line that closes it would show the tooltip again, and it would stay)
     if not (entry and list:IsShown()) or entry.scope or entry.filter or not ui.MarkVisible()
         or S.closingAt or not ui.bar:IsShown() then
         tip:Hide()
@@ -186,8 +197,9 @@ function ui.ShowTooltip(entry)
     ShowMade(entry.target or entry)
 end
 
--- The watcher checks every frame (cheap) for a tooltip waiting for its item's data and shows it once it is there or the wait
--- is over; tooltips showing "retrieving" are refilled five times a second. It hides itself when nothing waits.
+-- The watcher checks every frame (cheap) for a tooltip waiting for its item's data and shows it once it is there
+-- or the wait is over; tooltips showing "retrieving" are refilled five times a second for a few seconds. It
+-- hides itself when nothing waits.
 watch:SetScript("OnUpdate", function(self)
     local list, now = ui.list, GetTime()
     local waiting = list.tooltipWaiting
@@ -197,13 +209,18 @@ watch:SetScript("OnUpdate", function(self)
     if now < nextCheck then return end
     nextCheck = now + REFILL_EVERY
     local busy = list.tooltipWaiting ~= nil
-    if tip:IsShown() and tip:GetOwner() == list and list.tooltipEntry and Retrieving(tip) then
+    if tip:IsShown() and tip:GetOwner() == list and list.tooltipEntry and Retrieving(tip)
+            and now - (tip.fillSince or 0) < REFILL_FOR then
+        refilling = true
         ui.FillTooltip(tip, list.tooltipEntry)
+        refilling = false
         busy = true
     end
     local detail = ui.detail
-    if detail:IsShown() and S.detail and Retrieving(detail.tip) then
+    if detail:IsShown() and S.detail and Retrieving(detail.tip) and now - (detail.tip.fillSince or 0) < REFILL_FOR then
+        refilling = true
         ui.RefillDetail()
+        refilling = false
         busy = true
     end
     if not busy then self:Hide() end

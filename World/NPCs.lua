@@ -3,15 +3,17 @@ local _, D = ...
 -- NPCs: every server NPC (Data\NPCNames_enUS.lua) with title and facts (Data\NPCFacts.lua):
 -- type, rank and model from the client's creature cache (1.12's where the cache lacks the NPC);
 -- levels, roles, reaction and zones from the 1.12 data (NPCs new in Forever have none of those).
--- Built in the background (13,000 entries). Also: an NPC's zones (met zone first), distance
--- to you, and the gap between two NPCs.
+-- Built in the background. Also: roles and search words, an NPC's zones (met zone first), the
+-- NPCs of a zone, distance to you, the gap between two NPCs, and what NPCs drop and sell.
+
+local KEY = "npcs"
 
 D.NPC_ROLE = { VENDOR = 1, TRAINER = 2, QUEST_GIVER = 4, FLIGHT_MASTER = 8, INNKEEPER = 16, BANKER = 32,
     AUCTIONEER = 64, REPAIR = 128 }
 -- entry.creatureType: 1 beast, 2 dragonkin, 3 demon, 4 elemental, 5 giant,
 -- 6 undead, 7 humanoid, 8 critter, 9 mechanical, 10 not specified, 11 totem,
 -- 12 non-combat pet, 14 wild pet (0 unknown);
--- entry.npcRank: 1 elite, 2 rare elite, 3 boss, 4 rare
+-- entry.npcRank: 0 normal, 1 elite, 2 rare elite, 3 boss, 4 rare
 
 local facts, zones, displays
 local titles = {} -- id -> title, for NPCs that have one (kept)
@@ -22,8 +24,8 @@ local DISPLAY_FITS = 131072
 
 -- Memory: an entry keeps only its name and two packed numbers (plus the build key):
 -- packed = facts (with reaction) + NPC ID * 2^33, zones = zones + display ID * 2^36.
--- Four fields fill a table's four slots exactly (nine fields took sixteen: 0.89 KB per NPC,
--- measured in game). The rest is computed on demand via the domain metatable.
+-- Four fields fill a table's four slots exactly. The rest is computed on demand via the domain
+-- metatable.
 local ID_SHIFT, DISPLAY_SHIFT = 8589934592, 68719476736
 local REACTION_SHIFT = 536870912
 
@@ -35,8 +37,8 @@ local function Faction()
     return faction
 end
 
-local fields = D.fields.npcs or {}
-D.fields.npcs = fields
+local fields = D.fields[KEY] or {}
+D.fields[KEY] = fields
 fields.npcID = function(entry) return math.floor(entry.packed / ID_SHIFT) end
 -- Seen facts (LearnNPCs.lua) beat the 1.12 data; LearnNPCs.lua loads after this file, so look up lazily
 local function Learned(npcID) return D.Learned(npcID) end
@@ -46,6 +48,11 @@ fields.hasFacts = function(entry)
     local packed = entry.packed % ID_SHIFT
     return packed % 16384 ~= 0 or packed >= 2097152 or Learned(entry.npcID) ~= nil
 end
+-- the data's reaction (not what was seen) to a new character of each faction: alliance, horde
+function D.NPCDataReactions(entry)
+    local both = math.floor(entry.packed / REACTION_SHIFT) % 16
+    return math.floor(both / 4), both % 4
+end
 -- Toward you: 1 hostile, 2 neutral, 3 friendly, 0 unknown (as seen, else as to a new
 -- character of your faction: Data\NPCFacts.lua)
 fields.reaction = function(entry)
@@ -53,8 +60,9 @@ fields.reaction = function(entry)
     local learned = Learned(entry.npcID)
     local seen = learned and learned.reaction and side and learned.reaction[side]
     if seen then return seen end
-    local both = math.floor(entry.packed / REACTION_SHIFT) % 16
-    return side ~= "Horde" and math.floor(both / 4) or both % 4
+    local alliance, horde = D.NPCDataReactions(entry)
+    if side ~= "Horde" then return alliance end
+    return horde
 end
 fields.title = function(entry) return titles[entry.npcID] or "" end
 fields.displayID = function(entry)
@@ -113,7 +121,7 @@ local TEACHES_WORDS = {
     [182] = "herbalism", [185] = "cooking", [186] = "mining", [197] = "tailoring", [202] = "engineering",
     [333] = "enchanting", [356] = "fishing", [393] = "skinning",
 }
-fields.searchWords = function(entry)
+D.AddField(KEY, "searchWords", function(entry)
     local roles = entry.roles
     local teaches = D.npcTrainers and D.npcTrainers[entry.npcID]
     if roles == 0 and not teaches then return nil end
@@ -127,9 +135,9 @@ fields.searchWords = function(entry)
         words[#words + 1] = "trainer"
     end
     return words[1] and table.concat(words, " ") or nil
-end
+end)
 
-local meta -- D.Meta("npcs"), once the domain is registered
+local meta -- D.Meta(KEY), once the domain is registered
 
 local function AddNPC(list, id, name, title)
     if title ~= "" then titles[id] = title end
@@ -143,8 +151,7 @@ local function AddNPC(list, id, name, title)
 end
 
 local function Facts(Pause)
-    if facts then return end
-    facts, zones, displays = {}, {}, {}
+    facts, zones, displays = {}, {}, {} -- fresh: a build that failed halfway may have left them part filled
     wipe(bigDisplays)
     local list = D.npcFacts or {}
     for i = 1, #list, 4 do
@@ -154,10 +161,10 @@ local function Facts(Pause)
 end
 
 D.RegisterDomain({
-    key = "npcs",
+    key = KEY,
     background = true,
     collect = function(list, Pause)
-        meta = meta or D.Meta("npcs")
+        meta = meta or D.Meta(KEY)
         Facts(Pause)
         wipe(titles)
         local titlesEN = D.npcTitlesEN or {}
@@ -195,12 +202,12 @@ function D.NPCInZone(entry, zone)
 end
 
 -- NPCs of each zone (D.NPCInZone) in entry order: all zones in one pass per NPC build, run in
--- the background right after it (job "npc zones"). A pass per zone made the NPC tab lag, and a
--- pass per NPC met cost ~8 ms per refresh, so a met NPC (LearnNPCs.lua) only moves itself
--- between the two zones' lists (D.NPCMoved).
+-- the background right after it (job "npc zones"). An NPC met (LearnNPCs.lua) only moves itself
+-- between the two zones' lists (D.NPCMoved), without a new pass.
 local EMPTY = {}
 local byZone, byZoneVersion -- zone -> list of entries; state "data:npcs" it was built at
 local mobLevels = {}        -- zone -> middle level of its foes, or false (D.ZoneMobLevel)
+local pending               -- while the index is built in steps: D.NPCMoved calls (npcID, before, ...) to replay after
 
 local function EachZone(entry, fn)
     local met = D.MetZone(entry.npcID)
@@ -214,7 +221,9 @@ local function EachZone(entry, fn)
 end
 
 local function MakeIndex(Pause)
-    local version = D.State("data:npcs")
+    local version = D.State("data:" .. KEY)
+    local mine = {}
+    pending = mine
     local index, entry = {}, nil
     local function Add(zone)
         local list = index[zone]
@@ -224,28 +233,31 @@ local function MakeIndex(Pause)
         end
         if list[#list] ~= entry then list[#list + 1] = entry end
     end
-    for i, e in ipairs(D.Entries("npcs")) do
+    for i, e in ipairs(D.Entries(KEY)) do
         entry = e
         EachZone(e, Add)
         if i % 256 == 0 then Pause() end
     end
-    -- rebuilt meanwhile: this index is stale, the next ask builds it again
-    if version ~= D.State("data:npcs") then return end
+    if pending == mine then pending = nil end
+    -- rebuilt meanwhile: this index is stale, the next ask builds it again;
+    -- built meanwhile by an ask: that one is current
+    if version ~= D.State("data:" .. KEY) or byZoneVersion == version then return end
     byZone, byZoneVersion = index, version
     wipe(mobLevels)
+    -- NPCs met while this ran may have been past their zone already
+    for i = 1, #mine, 2 do D.NPCMoved(mine[i], mine[i + 1]) end
 end
-local function NoPause() end
 
 local function Index()
-    if not D.Built("npcs") then return nil end
-    if byZoneVersion ~= D.State("data:npcs") then MakeIndex(NoPause) end
+    if not D.Built(KEY) then return nil end
+    if byZoneVersion ~= D.State("data:" .. KEY) then MakeIndex(D.NoPause) end
     return byZone
 end
 
 D.OnBuilt(function(key)
-    if key ~= "npcs" then return end
+    if key ~= KEY then return end
     D.Background("npc zones", function(Pause)
-        MakeIndex(Pause)
+        if byZoneVersion ~= D.State("data:" .. KEY) then MakeIndex(Pause) end -- (an ask may have built it already)
         -- also every zone's foes (the first route search asks most zones)
         local zones = {}
         for zone in pairs(byZone or EMPTY) do zones[#zones + 1] = zone end
@@ -261,10 +273,16 @@ function D.NPCsInZone(zone)
     return index and index[zone] or EMPTY
 end
 
--- An NPC met in another zone (LearnNPCs.lua; before: zone it was met in earlier, or nil):
+-- An NPC met in another zone (LearnNPCs.lua; `before`: the zone it was met in earlier, or nil)
 -- moves between the two zones' lists, keeping the entries' order
 function D.NPCMoved(npcID, before)
-    if not byZone or byZoneVersion ~= D.State("data:npcs") then return end
+    if not byZone or byZoneVersion ~= D.State("data:" .. KEY) then
+        if pending then
+            pending[#pending + 1] = npcID
+            pending[#pending + 1] = before or false
+        end
+        return
+    end
     local entry = D.NPCByID(npcID)
     if not entry then return end
     for _, zone in ipairs({ before or 0, D.MetZone(npcID) or 0 }) do

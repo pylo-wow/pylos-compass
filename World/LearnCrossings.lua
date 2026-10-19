@@ -7,7 +7,7 @@ local _, D = ...
 -- crossing. Not in instances. A crossing within WITHIN yards of a known one between the same
 -- zones (either direction) is not stored again.
 -- PylosCompassWorldDB.crossings["zoneA>zoneB@x,y"] = { continent, ax, ay, bx, by }
--- (world yards; key x, y = zone A's spot in steps of WITHIN yards). Added to D.learnedPaths in
+-- (world yards; key x, y = zone A's spot). Added to D.learnedPaths in
 -- Data\Paths.lua's layout (groups of 10) as two-way, both factions (flags 7), on foot.
 
 local EVERY = 1     -- seconds between readings
@@ -41,7 +41,6 @@ local function Known(continent, a, b, x, y)
 end
 
 D.OnLoaded(function()
-    D.world.crossings = D.world.crossings or {}
     for key, c in pairs(D.world.crossings) do
         local a, b = Zones(key)
         if a then Add(a, b, c) end
@@ -50,13 +49,13 @@ end)
 
 -- Returns continent, world x, y, zone; nil where unknown
 local function Here()
-    if IsInInstance() or (UnitOnTaxi and UnitOnTaxi("player")) then return nil end
+    if IsInInstance() or UnitOnTaxi("player") then return nil end
     local mapID = C_Map.GetBestMapForUnit("player")
     if D.Secret(mapID) or not mapID then return nil end
     local pos = C_Map.GetPlayerMapPosition(mapID, "player")
     local x, y
     if pos then x, y = D.PositionXY(pos) end
-    if not x or not (C_Map.GetWorldPosFromMapPos and CreateVector2D) then return nil end
+    if not x then return nil end
     local continent, world = C_Map.GetWorldPosFromMapPos(mapID, CreateVector2D(x, y))
     local zone = D.PlayerZone()
     if D.Secret(continent) or not continent or not world or not zone then return nil end
@@ -75,10 +74,9 @@ local function Read()
     if (before[2] - x) ^ 2 + (before[3] - y) ^ 2 > NEAR * NEAR then return end
     local a, b = before[4], zone
     if Known(continent, a, b, before[2], before[3]) then return end
-    local key = ("%d>%d@%d,%d"):format(a, b, math.floor(before[2] / WITHIN), math.floor(before[3] / WITHIN))
     local c = { continent, math.floor(before[2] * 10 + 0.5) / 10, math.floor(before[3] * 10 + 0.5) / 10,
         math.floor(x * 10 + 0.5) / 10, math.floor(y * 10 + 0.5) / 10 }
-    D.world.crossings[key] = c
+    D.world.crossings[("%d>%d@%.1f,%.1f"):format(a, b, c[2], c[3])] = c
     Add(a, b, c)
     if D.RoutesChanged then D.RoutesChanged() end
     D.BumpState("travel")

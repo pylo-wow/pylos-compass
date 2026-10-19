@@ -3,76 +3,86 @@ local ns = D.engine
 local L = ns.L
 
 -- Reasons: why an entry is worth something to you now. Each reason is a small file in Reasons\, registered with
--- ns.RegisterReason. This file holds the stages of need and their worth (STAGES), an entry's fit (Fit), its note (symbol
--- or text of its strongest reason), list order (Sort) and what is kept until something changes (Prepare, Refresh).
+-- ns.RegisterReason. This file holds the stages of need and their worth (STAGES), an entry's fit (Fit), its note
+-- (symbol or text of its strongest reason), list order (Sort) and what is kept until something changes (Prepare,
+-- Refresh).
 --
 -- Each reason has a value (weight x strength) and a reach (how easily you can act on it now, Reach.lua): something
 -- small you can do right now beats something big far away, unless that is far more important.
 --
--- The stage decides first: each stage is worth twice the next (STAGES); a reason's weight within its stage lies between
--- LIGHTEST and HEAVIEST (0.7 to 1.4, at most twice another), so at equal reach and strength a lower stage never beats a
--- higher one:
---   play          repair, bags, what you run out of; grows with how bad it is; distance hurts less the worse it is ("urgent")
+-- The stage decides first: each stage is worth twice the next (STAGES); a reason's weight within its stage lies
+-- between LIGHTEST and HEAVIEST (0.7 to 1.4, at most twice another), so at equal reach and strength a lower stage never
+-- beats a higher one:
+--   play          repair, bags, what you run out of; grows with how bad it is; distance hurts less the worse it is
+--                 ("urgent")
 --   progress      quests, trainers, spells, clear upgrades
 --   professions   skill ups, recipes
 --   opportunity   consumables for your level, dungeons
--- A strength says how much of it there is (1 a plain case); it counts at most MOST (twice plain), so the strongest case
--- of a stage only reaches the plain case of the stage above. Growing amounts flatten (reasons.Grow). Other things that
--- move a value: reach, urgency, your personal weight (x0.5 to x1.5, Learning.lua), FOCUS (x1.5 for professions while you
--- work on them), what stands right there (BUNDLE) and further reasons (MORE). Using something often is no reason (it only
--- breaks ties: Sort, Relevant.lua); what you just did steps back (SATISFIED).
+-- A strength says how much of it there is (1 a plain case); it counts at most MOST (twice plain), so the strongest
+-- case of a stage only reaches the plain case of the stage above. Growing amounts flatten (reasons.Grow). Other things
+-- that move a value: reach, urgency, your personal weight (x0.5 to x1.5, Learning.lua), FOCUS (x1.5 for professions
+-- while you work on them), what stands right there (BUNDLE) and further reasons (MORE). Using something often is no
+-- reason (it only breaks ties: Sort, Relevant.lua); what you just did steps back (SATISFIED).
 --
 -- Two kinds of reasons, one engine:
---   do     what to do next (default): the suggestions window, debug window
+--   do     what to do next (default): the recommendations window
 --   know   what you would want to look up now (the search's start page): target, what you looted, a new zone, lookups;
 --          own scale, reach counts only as its square root
 --   both   a reason of both
 -- Fit, Weighed, Note, Explain, Keys, Errand, Sort and Each take the kind as last argument ("do" if not given);
 -- Topics, Covered, Via and bundling are about doing only.
 --
--- A reason:
+-- A reason (fields in this order in the files of Reasons\):
 --   key         unique
 --   stage       a STAGES key ("play", "progress", "professions", "opportunity"; knowing: "know"); required
 --   weight      within its stage, 1 a plain one, LIGHTEST to HEAVIEST; default 1
---   label       its name in the debug window
+--   label       a readable name; default: the key
 --   learn       false: not learned from being followed (Learning.lua), only from your word and choices
 --   kind        "do" (default), "know" or "both"
---   candidates  function(add): entries it brings itself (knowing: what you looted, your target); optional
 --   sources     the domains it applies to
+--   depends     the states (Core\State.lua; DEPENDS below) its prepare and test read; strengths are kept while they
+--               stay the same (default: all of DEPENDS). "rec:chosen" only for a knowing reason that reads the entry's
+--               own choices: a choice recomputes just the chosen entries
+--   topic       a key of reasons.TOPICS (the tabs of Window.lua), or function(entry) -> one
 --   prepare     function(): once whenever its states changed
+--   candidates  function(add): entries it brings itself (knowing: what you looted, your target); optional
 --   test        function(entry) -> strength (1 a plain case, more for more, at most MOST), or nil/false/0: none
---   depends     the states (Core\State.lua; DEPENDS below) its prepare and test read; strengths are kept while they stay
---               the same (default: all of DEPENDS). "rec:chosen" only for a knowing reason that reads the entry's own
---               choices: a choice recomputes just the chosen entries
 --   reach       function(entry, strength) -> factor, words; optional (an NPC: its distance; else 1)
---   urgent      how little distance counts, 0 (default: in full) to 1 (not at all), or function(entry, strength) -> that
+--   urgent      how little distance counts, 0 (default: in full) to 1 (not at all), or function(entry, strength) ->
+--               that
 --   profession  true or function(entry) -> true: counts for FOCUS
 --   covered     function(entry) -> true: another row stands for it (a spell to learn: its trainer); an entry whose
 --               reasons are all covered is left out of the lists
 --   via         function(entry) -> entry ID of the row that stands for getting it (an upgrade: the quest of your log
---               rewarding it; something to restock: its vendor); the "All" list shows that row only, carrying it (Relevant.lua)
+--               rewarding it; something to restock: its vendor); the "All" list shows that row only, carrying it
+--               (Relevant.lua)
 --   group       function(entry) -> key, nil if none: entries of one key are one errand (an upgrade: the quest rewarding
 --               it); a list shows the best and it carries the others (Relevant.lua); doing only
---   offers      function(entry) -> entry IDs it offers right there (a trainer: the spells), watched with it (Learning.lua)
---   topic       a key of reasons.TOPICS (the tabs of Window.lua), or function(entry) -> one
+--   offers      function(entry) -> entry IDs it offers right there (a trainer: the spells), watched with it
+--               (Learning.lua)
 --   renew       function(entry) -> list of what it has (a trainer: spells to learn); an entry hidden with "Don't
 --               suggest" comes back once there is something new
+--   affordable  function(entry) -> how many of what it offers you can pay (the nudges, Pushes.lua)
+--   errand      false: the note does not name an errand, so two NPCs with it are not one errand (reasons.Errand)
 --   note        function(entry, strength) -> what the row shows: a text ("Free slot") or { icon, count, tip }; optional
---   why         function(entry, strength) -> a tooltip sentence, for a reason without a note or whose note says too little; optional
--- The tooltip lists every reason an entry has with its reach (reasons.Explain). A new reason is a file in Reasons\ (in the TOC).
+--   why         function(entry, strength) -> a tooltip sentence, for a reason without a note or whose note says too
+--               little; optional
+-- The tooltip lists every reason an entry has with its reach (reasons.Explain). A new reason is a file in Reasons\ (in
+-- the TOC).
 
 local reasons = {}
 ns.reasons = reasons
 
--- what a plain reason (strength 1, right here, weight 1) of each stage is worth; each stage twice the next; know has its own scale
+-- what a plain reason (strength 1, right here, weight 1) of each stage is worth; each stage twice the next; know has
+-- its own scale
 local STAGES = { play = 80, progress = 40, professions = 20, opportunity = 10, know = 40 }
 reasons.STAGES = STAGES
 -- a reason's weight within its stage: at most twice another's, so the stage decides first
 local LIGHTEST, HEAVIEST = 0.7, 1.4
 local MOST = 2
 reasons.MOST = MOST
-
--- What reasons are about, in the order of the suggestions window's tabs (Window.lua). A reason's topic must be listed
+-- What reasons are about, in the order of the recommendations window's tabs (Window.lua). A reason's topic must be
+-- listed here, else it is worked out and never shown.
 -- here, else it is worked out and never shown.
 reasons.TOPICS = {
     { key = "class", name = L["Class"] },
@@ -86,7 +96,8 @@ reasons.TOPICS = {
 local TOPIC = {}
 for _, topic in ipairs(reasons.TOPICS) do TOPIC[topic.key] = topic end
 
--- a strength that grows with an amount but flattens: 1 at plain, +0.5 per doubling (2x: 1.5, 4x: 2 = MOST), never below 0
+-- a strength that grows with an amount but flattens: 1 at plain, +0.5 per doubling (2x: 1.5, 4x: 2 = MOST), never
+-- below 0
 function reasons.Grow(amount, plain)
     if amount <= 0 then return 0 end
     return math.min(MOST, math.max(0, 1 + 0.5 * math.log(amount / plain) / math.log(2)))
@@ -102,8 +113,6 @@ local BUNDLE = 0.3
 local MORE = 0.3
 reasons.TIRED, reasons.MORE, reasons.BUNDLE = TIRED, MORE, BUNDLE
 
--- A recipe you can still make is not done with one (skilling up repeats it); once the materials run out its reasons
--- fall by themselves.
 -- An NPC you went to stands for its errand: other NPCs of the same errand count as gone to as well. Per kind: errand ->
 -- seconds since the latest NPC of it was gone to (within ERRAND_WINDOW); made when first asked after a wipe.
 local ERRAND_WINDOW = 4 * SATISFIED_HALF
@@ -125,6 +134,8 @@ local function ErrandSince(entry, kind)
     return errand and list[errand]
 end
 
+-- A recipe you can still make is not done with one (skilling up repeats it); once the materials run out its reasons
+-- fall by themselves.
 local function Satisfied(id, entry, kind)
     if entry and entry.domain == "professions" and D.CraftTimes(entry) > 0 then return 1 end
     local since = id and ns.memory.SinceActed(id)
@@ -190,21 +201,22 @@ local function Focus()
     return 1
 end
 
--- What results depend on: Data states (Core\State.lua) and the engine's own: "rec:chosen" (a choice in a host),
+-- What results depend on: states of Core\State.lua and the engine's own: "rec:chosen" (a choice in the search),
 -- "rec:memory" (did, bought, passed over: Memory.lua), "rec:hidden" ("Don't suggest"), "rec:linked" (a chat link,
 -- Reasons\Linked.lua), "rec:rare" (a rare near you came up or died: Reasons\RareNearby.lua), "rec:learning" (personal
--- weights), "rec:weights" (item valuer, ItemValue\). STATES is also what the suggestions window follows (Window.lua:
--- recomputed soon after a change). WHERE is what changes as you walk or look about, including every name plate
--- ("rec:nearby"), chat link and error message ("rec:blocked"): for the start page only (the window would work all the time).
--- Results kept with these stay valid while none changed; STALE seconds at most, for what changes with time alone (what you
--- just did fades, a hearthstone gets ready). "ratings" is left out: it changes with every buff.
+-- weights), "rec:weights" (item valuer, ItemValue\). STATES is also what the recommendations window follows
+-- (Window.lua: recomputed soon after a change). WHERE is what changes as you walk or look about, including every
+-- name plate
+-- ("rec:nearby"), chat link and error message ("rec:blocked"): for the start page only (the window would work all the
+-- time). Results kept with these stay valid while none changed; STALE seconds at most, for what changes with time
+-- alone (what you just did fades, a hearthstone gets ready). "ratings" is left out: it changes with every buff.
 reasons.STATES = { "bags", "gear", "durability", "level", "money", "prices", "zone", "quests", "spells", "skills",
-    "talents", "travel", "npcs", "drops", "data", "group", "events", "rec:chosen", "rec:memory", "rec:hidden", "rec:learning", "rec:rare",
-    "rec:weights" }
+    "talents", "travel", "npcs", "drops", "data", "group", "events", "rec:chosen", "rec:memory", "rec:hidden",
+    "rec:learning", "rec:rare", "rec:weights" }
 local WHERE = { "position", "target", "rec:nearby", "rec:linked", "rec:blocked" }
--- A choice ("rec:chosen") changes only the chosen entry: its use and tiredness, the recent choices (candidates), and its
--- strength for reasons naming "rec:chosen" in depends (Looked up). So a choice alone recomputes just the chosen entries
--- and keeps the rest (WipeChosen; the start page after a choice took 4.4 ms and 500 KB in the test harness without JIT).
+-- A choice ("rec:chosen") changes only the chosen entry: its use and tiredness, the recent choices (candidates), and
+-- its strength for reasons naming "rec:chosen" in depends (Looked up). So a choice alone recomputes just the chosen
+-- entries and keeps the rest (WipeChosen).
 local DEPENDS, OTHERS = {}, {}
 for _, list in ipairs({ reasons.STATES, WHERE }) do
     for _, name in ipairs(list) do
@@ -212,7 +224,6 @@ for _, list in ipairs({ reasons.STATES, WHERE }) do
         if name ~= "rec:chosen" then OTHERS[#OTHERS + 1] = name end
     end
 end
-reasons.DEPENDS = OTHERS -- a reason's default depends
 local STALE = 30
 local states = D.Cache(DEPENDS, STALE)
 local others = D.Cache(OTHERS, STALE) -- all but the choices: did anything else change
@@ -221,8 +232,8 @@ reasons.generation = 0 -- grows whenever the results are thrown away (Relevant.l
 
 local Run, Renewed
 
--- a reason's own states (its depends, without "rec:chosen": a choice is
--- handled per entry, DropChosen); true if they changed: its strengths go
+-- a reason's own states (its depends, without "rec:chosen": a choice is handled per entry, DropChosen); true if they
+-- changed: its strengths go
 local function Renew(reason, everything)
     if not reason.states then
         local depends = {}
@@ -280,7 +291,8 @@ local function Wipe(everything, chosen)
     wipe(errands.know)
     actedErrands["do"], actedErrands.know = false, false
     wipe(bundles)
-    -- a hidden entry with something new comes back: unhidden here, not while its fit is worked out (side effect on memory)
+    -- a hidden entry with something new comes back: unhidden here, not while its fit is worked out (a side effect on
+    -- memory)
     local back
     for id, renew in pairs(ns.memory.AllHidden()) do
         if type(renew) == "string" then
@@ -294,9 +306,9 @@ local function Wipe(everything, chosen)
     for _, id in ipairs(back or NONE) do ns.memory.Hide(id, false) end
 end
 
--- Only choices changed since the last wipe: a new generation (lists are mixed again: used, tired, recent choices) and the
--- chosen entries are recomputed (fits, and strengths for reasons that read choices); the rest stays. If anything else
--- changed too, or a trainer was chosen: Wipe. Returns false where Refresh has to Wipe itself.
+-- Only choices changed since the last wipe: a new generation (lists are mixed again: used, tired, recent choices) and
+-- the chosen entries are recomputed (fits, and strengths for reasons that read choices); the rest stays. If anything
+-- else changed too, or a trainer was chosen: Wipe. Returns false where Refresh has to Wipe itself.
 local function WipeChosen()
     local _, other = others.Get()
     if other then return false end
@@ -318,7 +330,7 @@ local function WipeChosen()
     return true
 end
 
--- gets every reason ready; once per frame however often asked (the test harness changes the game without events and asks so)
+-- gets every reason ready; once per frame however often asked
 function reasons.Prepare()
     states.Get() -- (a Refresh in this frame keeps what this works out)
     local _, newFrame = thisFrame.Get()
@@ -326,7 +338,7 @@ function reasons.Prepare()
 end
 
 -- gets every reason ready only if something they depend on changed (DEPENDS): tabs opened again where you stand keep
--- their work (a tab switch cost a whole refresh, ~10 ms and 1.4 MB in the test harness)
+-- their work
 function reasons.Refresh()
     local _, renewed = states.Get()
     if renewed then
@@ -401,8 +413,8 @@ local function Value(reason, entry, strength, kind)
     return reason.weight * personal * strength * factor * focused, personal, factor, words, focused
 end
 
--- every reason of a kind an entry has: fn(reason, strength, value, personal, reach factor, words, focus) (tooltip; the
--- debug window takes a score apart with it)
+-- every reason of a kind an entry has: fn(reason, strength, value, personal, reach factor, words, focus) (the tooltip
+-- takes the words; the other parts tell how the value came about)
 function reasons.Each(entry, kind, fn)
     kind = kind or "do"
     for _, reason in ipairs(Of(entry, kind)) do
@@ -417,8 +429,8 @@ function reasons.Test(key, entry)
     return nil
 end
 
--- What makes a hidden entry come back: what its reasons have now as text (";key:thing;key:thing;", "" if none). It comes
--- back once there is a thing that was not there (a trainer with a new spell), not when there are fewer.
+-- What makes a hidden entry come back: what its reasons have now as text (";key:thing;key:thing;", "" if none). It
+-- comes back once there is a thing that was not there (a trainer with a new spell), not when there are fewer.
 function reasons.Renew(entry)
     local parts = {}
     for _, reason in ipairs(Of(entry)) do
@@ -452,7 +464,8 @@ function reasons.Fit(entry, kind)
     local fit = fits[kind][entry]
     if fit then return fit end
     fit = 0
-    -- nor an NPC or quest of a world event not running now (D.EventAway), nor a dungeon of the other side only (entry.side)
+    -- 0 also for an NPC or quest of a world event not running now (D.EventAway) and a dungeon of the other side only
+    -- (entry.side)
     local otherSide = entry.domain == "dungeons" and entry.side and entry.side ~= UnitFactionGroup("player")
     if reasons.Hidden(entry) or D.EventAway(entry) or otherSide then
         fits[kind][entry], strongest[kind][entry] = 0, false
@@ -470,7 +483,8 @@ function reasons.Fit(entry, kind)
             if reason.note and value > bestValue then best, bestValue = { reason, strength }, value end
         end
     end
-    -- the strongest reason counts in full, the others only MORE of theirs (adding them up let several small ones beat one clearly better)
+    -- the strongest reason counts in full, the others only MORE of theirs (adding them up would let several small ones
+    -- beat one clearly better)
     fit = top + MORE * (fit - top)
     fits[kind][entry] = fit
     strongest[kind][entry] = best or false
@@ -523,7 +537,9 @@ function reasons.Topics(entry)
     for _, reason in ipairs(Of(entry)) do
         if reason.topic and Run(reason, entry) then
             local topic = type(reason.topic) == "function" and reason.topic(entry) or reason.topic
-            if not TOPIC[topic] then error(("reason %s: unknown topic %s (reasons.TOPICS)"):format(reason.key, tostring(topic))) end
+            if not TOPIC[topic] then
+                error(("reason %s: unknown topic %s (reasons.TOPICS)"):format(reason.key, tostring(topic)))
+            end
             topics[topic] = true
         end
     end
@@ -543,7 +559,8 @@ function reasons.Errand(entry, kind)
     if known ~= nil then return known or nil end
     reasons.Fit(entry, kind)
     local best = strongest[kind][entry]
-    local errand = best and (best[1].key .. ":" .. tostring(NoteText(best[1].note(entry, best[2])))) or false
+    local errand = best and best[1].errand ~= false
+        and (best[1].key .. ":" .. tostring(NoteText(best[1].note(entry, best[2])))) or false
     errands[kind][entry] = errand
     return errand or nil
 end
@@ -605,7 +622,7 @@ function reasons.Explain(entry, kind)
     kind = kind or "do"
     local lines, sorted = {}, {}
     if reasons.Fit(entry, kind) <= 0 then return lines end
-    -- not what the system learned about a reason ("you seldom follow this"): puzzling, it stands in the debug window
+    -- not what the engine learned about a reason ("you seldom follow this"): puzzling in a tooltip
     reasons.Each(entry, kind, function(reason, strength, value, _, _, words)
         local text = Sentence(reason, entry, strength)
         if not text then return end

@@ -1,20 +1,19 @@
 local _, D = ...
 
--- Data: the game's data and what follows from it, for other addons. Facts only: no weighing, no interface.
--- Folders: Core\ (frame, domains, entries, IDs, events, maps, state, background builder, saved data),
+-- The data layer: the game's data and what follows from it. Facts only: no weighing, no interface.
+-- Folders: Core\ (Init.lua: the namespaces of the search and the recommendations; Core.lua: events, domains, entry
+-- IDs, text helpers; State.lua: state versions and caches; Map.lua: places and maps; Build.lua: entry lists and the
+-- background builder; Saved.lua: saved data; Options.lua: the options page and the global PylosCompass),
 -- World\ (one file per domain plus data learned while playing), You\ (the current character), Data\ (generated files).
+-- Engine\ (D.engine), Search\ (D.search) and Advice\ (D.advice) sit beside them and read the data layer from D.
+-- The API of a domain is documented in its World\ file.
 --
--- The root namespace of Pylos Compass: the search (D.search) and the recommendations (D.advice) read Data's names from it.
--- Gathering(itemID) -> nil or { kind "mine"/"herb"/"skin"/"drop", skill, zones = { uiMapID, ... } fullest first, low, high, creatureType }.
--- QuestGiver(s)/QuestTaker(s) also return their origin: "seen" (played), nil (client items) or "1.12" (data).
 -- Entries answer facts as fields (entry.name, entry.icon, ...; per domain in its file).
 -- entry.searchWords: lowercase English words an entry is also found by, single-spaced, nil if none
 -- (NPC services "flight master innkeeper vendor repair", dungeon short names "bfd").
--- D.version is only for old readers: use D.State("data") or D.State("data:<key>").
 
 D.API = 1
 D.DOT = "  ·  " -- separator inside one line (tooltip lines, reason texts)
-
 
 -- Text
 
@@ -91,21 +90,36 @@ function D.Secret(value) return issecretvalue ~= nil and issecretvalue(value) en
 -- One frame for all events. D.On(event, fn) calls fn(event, ...) in registration order; returns false if the
 -- client does not know the event (an unknown event would abort the file, seen in game).
 -- A handler error is reported, the others still run.
-local handlers = {} -- event -> list of functions
-local dispatcher = CreateFrame("Frame")
-dispatcher:SetScript("OnEvent", function(_, event, ...)
-    local list = handlers[event]
-    for i = 1, #list do
-        local ok, err = pcall(list[i], event, ...)
-        if not ok then geterrorhandler()(err) end
-    end
-end)
+-- UNIT_ events come from a second frame that hears only the player (every unit's cast would pass otherwise);
+-- ALL_UNITS stay on the first frame (State.lua wants UNIT_LEVEL of group members).
+local ALL_UNITS = { UNIT_LEVEL = true }
+local function NewDispatcher()
+    local handlers, frame = {}, CreateFrame("Frame") -- event -> list of functions
+    frame:SetScript("OnEvent", function(_, event, ...)
+        local list = handlers[event]
+        for i = 1, #list do
+            local ok, err = pcall(list[i], event, ...)
+            if not ok then geterrorhandler()(err) end
+        end
+    end)
+    return handlers, frame
+end
+local handlers, dispatcher = NewDispatcher()
+local unitHandlers, unitDispatcher = NewDispatcher()
 function D.On(event, fn)
-    local list = handlers[event]
+    local mine, frame = handlers, dispatcher
+    if event:find("^UNIT_") and not ALL_UNITS[event] then mine, frame = unitHandlers, unitDispatcher end
+    local list = mine[event]
     if not list then
-        if not pcall(dispatcher.RegisterEvent, dispatcher, event) then return false end
+        local ok
+        if frame == unitDispatcher then
+            ok = pcall(frame.RegisterUnitEvent, frame, event, "player")
+        else
+            ok = pcall(frame.RegisterEvent, frame, event)
+        end
+        if not ok then return false end
         list = {}
-        handlers[event] = list
+        mine[event] = list
     end
     list[#list + 1] = fn
     return true
@@ -135,12 +149,11 @@ end
 --   key, collect(list, Pause), background (true: built in the background), events (optional),
 --   signature (optional function() -> text; rebuild only when it changed)
 -- Entries are plain tables with a per-domain metatable; fields not stored are computed on demand
--- (D.fields[domain][name](entry)) to save table slots (19,224 items). Hosts may add fields (D.AddField); Data never reads them.
+-- (D.fields[domain][name](entry)) to save table slots. Other files add fields with D.AddField (World\Lines.lua,
+-- World\NPCs.lua, World\Dungeons.lua, the search).
 D.domains = {}   -- key -> domain
 D.order = {}     -- domains in registration order (spells before professions: "s:" IDs)
 D.fields = {}    -- domain key -> field name -> function(entry)
--- counts builds and drops; legacy, same as D.State("data")
-D.version = 0
 
 local metas = {}
 function D.Meta(key)
@@ -246,7 +259,8 @@ function D.NameEN(kind, id)
 end
 
 -- Who needs what
--- Domains are built only when an addon needs them: D.Need(key, who, true/false). D.OnBuilt(function(key, list)) hears every finished build.
+-- Domains are built only when a part needs them: D.Need(key, who, true/false).
+-- D.OnBuilt(function(key, list)) hears every finished build.
 
 local needs = {} -- domain key -> who -> true
 function D.Need(key, who, on)

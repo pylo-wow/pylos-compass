@@ -1,7 +1,6 @@
 local _, D = ...
-if D.off then return end
 
--- The walkable crossings between zones, for Pylos Data's route planner
+-- The walkable crossings between zones, for the route planner
 -- (World\Routes.lua: on foot only within a zone, into another one only through
 -- these; before, the straight line ran through mountains). Made by
 -- gen_paths.ps1 from Carbonite's zone connections for WoW Forever:

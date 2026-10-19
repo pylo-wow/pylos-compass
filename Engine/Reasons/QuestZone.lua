@@ -9,7 +9,7 @@ local L = ns.L
 local BELOW, ABOVE = 2, 3
 local FEW, MANY = 3, 8
 
-local counts = {} -- zone ID -> open quests for your level; per search
+local counts = {} -- zone ID -> open quests for your level; see prepare
 
 local function Count(entry)
     local count = counts[entry.zoneID]

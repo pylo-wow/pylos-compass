@@ -111,17 +111,15 @@ end
 
 local function WindowItems()
     local list = {}
-    for index = 1, GetMerchantNumItems and GetMerchantNumItems() or 0 do
+    for index = 1, GetMerchantNumItems() or 0 do
         local price, quantity, available, extended
-        if C_MerchantFrame and C_MerchantFrame.GetItemInfo then
-            local info = C_MerchantFrame.GetItemInfo(index)
-            if info then price, quantity, available, extended = info.price, info.stackCount, info.numAvailable, info.hasExtendedCost end
-        elseif GetMerchantItemInfo then
-            local _
-            _, _, price, quantity, available, _, _, extended = GetMerchantItemInfo(index)
+        local info = C_MerchantFrame.GetItemInfo(index)
+        if info then
+            price, quantity, available, extended = info.price, info.stackCount, info.numAvailable, info.hasExtendedCost
         end
-        local itemID = D.ItemIDFromLink(GetMerchantItemLink and GetMerchantItemLink(index))
-        if itemID and not D.Secret(price) and price and price > 0 and not extended then
+        local itemID = D.ItemIDFromLink(GetMerchantItemLink(index))
+        local secret = D.Secret(price) or D.Secret(quantity) or D.Secret(available) or D.Secret(extended)
+        if itemID and not secret and price and price > 0 and not extended then
             list[#list + 1] = { itemID = itemID, price = price, quantity = math.max(quantity or 1, 1),
                 limited = (available or -1) > 0 }
         end

@@ -1,9 +1,8 @@
 local _, D = ...
 
--- Builds the domains' entry lists and runs the one background queue all addons share.
--- A built list is never mutated: a rebuild makes a new one, so a host's index made from the old list stays valid.
+-- Builds the domains' entry lists and runs the one background queue of the addon.
+-- A built list is never mutated: a rebuild makes a new one, so an index made from the old list stays valid.
 -- Small domains are built at once behind the loading screen, big ones in the background.
-
 
 -- Stable merge sort of values by keys, in pausable steps (table.sort cannot be interrupted).
 function D.SortSideBySide(keys, values, Pause)
@@ -37,15 +36,14 @@ function D.SortSideBySide(keys, values, Pause)
     end
 end
 
--- A domain was built or dropped: bump its state and "data" (D.version mirrors "data" for old readers).
+-- A domain was built or dropped: bump its state and "data".
 local function Changed(key)
     D.BumpState("data:" .. key)
     D.BumpState("data")
-    D.version = D.State("data")
 end
 
 local function BuildDomain(domain, Pause)
-    -- dropped meanwhile (D.Drop): discard the result
+    -- D.Drop while this runs changes the generation: the result is then discarded
     local generation = domain.generation
     if domain.signature then domain.builtSignature = domain.signature() end
     local entries = {}
@@ -80,7 +78,8 @@ local function BuildDomain(domain, Pause)
 end
 
 -- Background
--- A coroutine runs queued jobs (function(Pause)) for BUDGET ms per frame, paused in combat.
+-- A coroutine runs the queued jobs (function(Pause)), resumed every frame outside combat; a job's Pause() yields once
+-- BUDGET ms of the frame are used.
 -- GetTimePreciseSec because debugprofilestop restarts whenever any addon calls debugprofilestart.
 local BUDGET = 3
 local function Now() return GetTimePreciseSec() * 1000 end
@@ -146,7 +145,8 @@ end
 
 -- Building
 
-local function NoPause() end
+-- Pause for jobs run to the end at once
+function D.NoPause() end
 
 -- rebuild in the background; the old list stays until then
 function D.Rebuild(key)
@@ -162,16 +162,16 @@ function D.BuildMissing()
             if domain.background then
                 D.Rebuild(domain.key)
             else
-                BuildDomain(domain, NoPause)
+                BuildDomain(domain, D.NoPause)
             end
         end
     end
 end
 
--- TEST/hosts: build at once; refuses while the background builder runs.
+-- Builds at once (developer tools and tests); refuses while the background builder runs.
 function D.BuildNow(key)
     if builder then return false end
-    BuildDomain(D.domains[key], NoPause)
+    BuildDomain(D.domains[key], D.NoPause)
     return true
 end
 
@@ -189,7 +189,7 @@ end
 
 -- Changes
 -- Events come in bursts (every skill point fires SKILL_LINES_CHANGED; the professions signature asks 2,666 spells):
--- check once, CHANGE_DELAY after the last one, not in combat.
+-- check once, CHANGE_DELAY after the first of a burst, not in combat (a check in combat waits another CHANGE_DELAY).
 local CHANGE_DELAY = 2
 local changing = {} -- domain -> true while its check waits
 local function Check(domain)
@@ -201,15 +201,6 @@ local function Check(domain)
     if not domain.list then return end
     if domain.signature and domain.signature() == domain.builtSignature then return end
     D.Rebuild(domain.key)
-end
--- Also asked when a host opens: the skill window's data is not ready behind the loading screen.
--- Skipped while a build is queued/running (it would overwrite this list with an older one).
-function D.CheckNow(key)
-    local domain = D.domains[key]
-    if domain and domain.list and domain.signature and not D.Waiting("domain:" .. key)
-            and domain.signature() ~= domain.builtSignature then
-        BuildDomain(domain, NoPause)
-    end
 end
 
 local domainsFor = {} -- event -> domains it may change

@@ -1,8 +1,9 @@
 local ns = select(2, ...).search
-
--- The tabs: the categories on top of the bar, the close tab at the end of their row, and the subcategories left of the window below the bar.
-
 local L = ns.L
+
+-- The tabs: the categories on top of the bar, the close tab at the end of their row, and the subcategories
+-- left of the window below the bar.
+
 local S = ns.state
 local W = ns.widgets
 local ui = ns.ui
@@ -13,19 +14,20 @@ local LightTab = W.LightTab
 -- On top of the bar, one per switched-on category, like the subcategory tabs: their lower end is under the
 -- bar's frame. The one searched in stands out and lights up, the others are dimmed. A click picks one,
 -- hovering names it. Made once per category, placed by RenderBar (ui.PlaceChips). They rise out from under
--- the bar one after another when it opens, the close tab last (shared with the suggestions window's tabs:
+-- the bar one after another when it opens, the close tab last (shared with the recommendations window's tabs:
 -- UI\Kit\Widgets.lua).
-local CHIP, CHIP_GAP, CHIP_OUT = W.TAB_SIZE, W.TAB_GAP, W.TAB_OUT
-local CHIP_TIME, CHIP_STAGGER, CHIP_RISE = W.FADE_TIME, W.TAB_STAGGER, W.TAB_RISE
+local TAB_SIZE, TAB_GAP, TAB_OUT = W.TAB_SIZE, W.TAB_GAP, W.TAB_OUT
+local FADE_TIME, TAB_STAGGER, TAB_RISE = W.FADE_TIME, W.TAB_STAGGER, W.TAB_RISE
+local TUCK = 2 -- the tab row sits this far under the bar's frame edge
 
 local chips = CreateFrame("Frame", nil, bar)
-chips:SetPoint("BOTTOMLEFT", bar, "TOPLEFT", W.TAB_INSET, -2)
+chips:SetPoint("BOTTOMLEFT", bar, "TOPLEFT", W.TAB_INSET, -TUCK)
 chips:SetFrameLevel(math.max(bar:GetFrameLevel() - 3, 0))
-chips:SetSize(1, CHIP)
+chips:SetSize(1, TAB_SIZE)
 
 local function Chip(source)
-    local chip = W.IconTab(chips, CHIP)
-    W.ShowIcon(chip.icon, source, CHIP - 14)
+    local chip = W.IconTab(chips, TAB_SIZE)
+    W.ShowIcon(chip.icon, source, TAB_SIZE - 14)
     chip.source = source
     chip.rise = 1
     chip:RegisterForClicks("LeftButtonUp", "RightButtonUp")
@@ -34,8 +36,7 @@ local function Chip(source)
         ns.view.PickScope(source)
     end)
     chip:SetScript("OnEnter", function(self)
-        W.ControlTip(tip, self, "ANCHOR_TOP", source.name,
-            self.countText)
+        W.ControlTip(tip, self, "ANCHOR_TOP", source.name, self.countText)
     end)
     chip:SetScript("OnLeave", function() tip:Hide() end)
     return chip
@@ -48,13 +49,14 @@ for _, source in ipairs(ns.sources) do source.chip = Chip(source) end
 local function PlaceChip(chip)
     chip:SetAlpha(chip.rise)
     chip:ClearAllPoints()
-    chip:SetPoint("BOTTOMLEFT", (chip.slot - 1) * (CHIP + CHIP_GAP), (chip.on and CHIP_OUT or 0) - CHIP_RISE * (1 - chip.rise))
+    chip:SetPoint("BOTTOMLEFT", (chip.slot - 1) * (TAB_SIZE + TAB_GAP),
+        (chip.on and TAB_OUT or 0) - TAB_RISE * (1 - chip.rise))
 end
 local function Rise(chip, value)
     chip.rise = value
     PlaceChip(chip)
 end
-local rising = { duration = CHIP_TIME, apply = Rise }
+local rising = { duration = FADE_TIME, apply = Rise }
 
 local shownChips = {}
 function ui.PlaceChips()
@@ -98,11 +100,11 @@ end
 
 -- The close tab (UI\Kit\Widgets.lua): at the right end of the tabs' row, W.TAB_INSET in from the bar's
 -- right edge; it rises last, W.CLOSE_TAB_DELAY after the filter window.
-local closeTab = W.CloseTab(chips, CHIP, tip, function() ns.Close() end)
+local closeTab = W.CloseTab(chips, TAB_SIZE, tip, function() ns.Close() end)
 local function RiseClose(tab, value)
     tab:SetAlpha(value)
     tab:ClearAllPoints()
-    tab:SetPoint("BOTTOMRIGHT", bar, "TOPRIGHT", -W.TAB_INSET, -2 - CHIP_RISE * (1 - value))
+    tab:SetPoint("BOTTOMRIGHT", bar, "TOPRIGHT", -W.TAB_INSET, -TUCK - TAB_RISE * (1 - value))
 end
 local closeRising = { delay = W.CLOSE_TAB_DELAY, duration = W.CLOSE_TAB_TIME, apply = RiseClose }
 ui.After("filters", function() W.Tween(closeTab, "rise", closeRising) end)
@@ -112,7 +114,7 @@ function ui.RaiseChips()
     for _, source in ipairs(ns.sources) do source.chip.rise = 1 end
     ui.PlaceChips()
     for i, chip in ipairs(shownChips) do
-        rising.delay = (i - 1) * CHIP_STAGGER
+        rising.delay = (i - 1) * TAB_STAGGER
         W.Tween(chip, "rise", rising)
     end
     W.Tween(closeTab, "rise", nil)
@@ -121,11 +123,11 @@ end
 
 -- Subcategory tabs
 -- The subcategories of the category searched in (only those offered, e.g. your professions) as tabs on the left
--- edge of the window below the bar (list or detail view): W.SideTabs, as in the suggestions window. A click sets
+-- edge of the window below the bar (list or detail view): W.SideTabs, as in the recommendations window. A click sets
 -- one, or clears it if set. The window beside them is at least as tall as the tabs need; while it grows,
 -- tabs below its edge fade in as it reaches them.
 local TAB_INSET = W.TAB_INSET
-local WINDOW_GAP = 6 -- the window below the bar starts this far below it
+local WINDOW_GAP = ui.WINDOW_GAP
 local side = W.SideTabs(bar, {
     tip = tip,
     room = function()
@@ -138,7 +140,8 @@ local side = W.SideTabs(bar, {
         if ns.view.Subcategory() == f then ns.view.RemoveFilter(1) else ns.view.AddFilter(f, true) end
     end,
 })
--- below the windows' frame (their box is one level under them): the frame covers the tabs' open end, so they come out from under it
+-- below the windows' frame (their box is one level under them): the frame covers the tabs' open end, so they
+-- come out from under it
 side.frame:SetPoint("TOPRIGHT", bar, "BOTTOMLEFT", 2, -WINDOW_GAP - TAB_INSET)
 side.frame:SetFrameLevel(math.max(bar:GetFrameLevel() - 3, 0))
 

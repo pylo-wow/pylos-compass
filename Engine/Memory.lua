@@ -1,23 +1,23 @@
 local _, D = ...
 local ns = D.engine
 
--- Memory: what you do, learned over time, keyed by Data entry IDs ("s:133", "i:2589", "n:1234"). A host
--- (the search) tells it what you chose there. All of it stays on your computer.
+-- Memory: what you do, learned over time, keyed by entry IDs of the data layer ("s:133", "i:2589", "n:1234"). The
+-- search tells it what you chose there. All of it stays on your computer.
 -- PylosCompassEngineDB:
---   chosen    what you chose in a host: "" -> entry ID -> { value, time }, plus "\1rest", "\1instance", "\1group",
+--   chosen    what you chose in the search: "" -> entry ID -> { value, time }, plus "\1rest", "\1instance", "\1group",
 --             "\1world": the choices in that situation ("\1" cannot be typed). A choice adds 1, only looking 0.5;
 --             values halve every two weeks
---   did       what you did in the game, also without a host: spells cast (crafting too), items used and bought,
---             NPCs talked to; entry ID -> { value, time }, halves every two weeks
+--   did       what you did in the game, not only what you chose in the search: spells cast (crafting too), items used
+--             and bought, NPCs talked to, quests turned in; entry ID -> { value, time }, halves every two weeks
 --   bought    item ID -> { value, time, stock }; stock: how many you usually have after buying (to tell when you
 --             run low); halves every month
---   skipped   suggestions passed over, per kind ("do": the window, "know": a host's search lists): kind -> entry ID ->
+--   skipped   suggestions passed over, per kind ("do": the window, "know": the search's lists): kind -> entry ID ->
 --             { value, time }; you chose one further down a list (the ones above were seen and not wanted) or called
 --             one bad. Passing over in the search does not tire the window's suggestions. Halves every week;
 --             choosing the entry forgets it
 --   hidden    entry ID -> true or the text they come back on ("Don't suggest"; reasons.Renew)
---   reasonStats  how often you followed each reason (kept by Learning.lua, wiped on reset)
--- Changes are told as Data states (Reasons.lua keeps its results by them): "rec:chosen" (memory.Chose),
+--   reasonStats  how often you followed each reason (kept by Learning.lua)
+-- Changes are told as states (D.BumpState; Reasons.lua keeps its results by them): "rec:chosen" (memory.Chose),
 -- "rec:memory" (did, bought, skipped, forgotten), "rec:hidden".
 
 local memory = {}
@@ -34,8 +34,14 @@ local FORGOTTEN = 0.05             -- values below are dropped at login
 local USED_CHOSEN, USED_HERE, USED_DONE = 0.5, 0.2, 0.3
 local KINDS = { "do", "know" }
 
--- only IDs of Data entries are kept (a cast of Auto Shot or a quest item's spell would only fill it)
+-- only IDs of entries are kept (a quest item's spell would only fill it)
 local function Accept(id) return D.EntryByID(id) ~= nil end
+
+-- auto attacks are active spells but every swing-timer cast would count as "done": Auto Shot, Attack, Shoot, Throw,
+-- Shoot Bow / Gun / Crossbow
+local AUTO_ATTACKS = {
+    [75] = true, [6603] = true, [5019] = true, [2764] = true, [2480] = true, [7918] = true, [7919] = true
+}
 
 -- memory.OnAction(function(id)): called when you chose an entry, did it in the game or talked to the NPC
 -- (Learning.lua checks there whether a recommendation was followed)
@@ -48,8 +54,7 @@ end
 local function DB() return ns.db end
 local function Changed() D.BumpState("rec:memory") end
 
--- how strongly a record counts now, 0..1: value / (value + half), so with
--- half = 1 one choice is 0.5, three are 0.75
+-- how strongly a record counts now, 0..1: value / (value + half), so with half = 1 one choice is 0.5, three are 0.75
 local function Strength(record, now, halfLife, half)
     if not record then return 0 end
     local value = D.Decay(record[1], now - record[2], halfLife)
@@ -78,9 +83,9 @@ local function SituationKey() return "\1" .. memory.Situation() end
 
 -- Choices
 
--- Remembers a chosen entry (a host tells it); amount 1 (default), 0.5 for only looking; a chosen entry is no longer tired.
--- A choice changes only that entry, so it is told as state "rec:chosen" with the IDs (memory.TakeChosen) and
--- Reasons.lua recomputes just that entry (the start page after a choice took 4.4 ms and 500 KB in the test harness without JIT).
+-- Remembers a chosen entry (the search tells it); amount 1 (default), 0.5 for only looking; choosing an entry clears
+-- its passing over. A choice changes only that entry, so it is told as state "rec:chosen" with the IDs
+-- (memory.TakeChosen) and Reasons.lua recomputes just that entry.
 local chosenSince = {} -- IDs chosen since Reasons.lua last took them
 function memory.Chose(id, amount)
     local db = DB()
@@ -116,9 +121,6 @@ function memory.UsedNow()
             + USED_DONE * (did and Strength(did[id], now, HALF_LIFE, DONE_FOR_HALF) or 0)
     end
 end
-function memory.Used(id)
-    return memory.UsedNow()(id)
-end
 
 function memory.SinceActed(id)
     local db = DB()
@@ -131,7 +133,7 @@ function memory.SinceActed(id)
     return last and time() - last or nil
 end
 
--- "used" taken apart (debug window, Reasons\LookedUp.lua): chosen, chosen here, done (each 0..1), then their shares
+-- "used" taken apart (Reasons\LookedUp.lua): chosen, chosen here, done (each 0..1), then their shares in UsedNow
 function memory.UsedParts(id)
     local db = DB()
     if not db or not id then return 0, 0, 0, USED_CHOSEN, USED_HERE, USED_DONE end
@@ -154,8 +156,7 @@ function memory.Recent()
     return list
 end
 
--- IDs chosen or done that start with a prefix ("n:"), so a host need not ask every entry (the search's NPC tab lagged
--- asking 14,000 NPCs)
+-- IDs chosen or done that start with a prefix ("n:"), so a caller need not ask every entry (14,000 NPCs)
 function memory.IDs(prefix)
     local db = DB()
     local list, seen = {}, {}
@@ -193,28 +194,34 @@ function memory.Did(id)
 end
 
 ns.On("UNIT_SPELLCAST_SUCCEEDED", function(_, _, _, spellID)
-    if spellID and not D.Secret(spellID) then memory.Did("s:" .. spellID) end
+    if spellID and not D.Secret(spellID) and not AUTO_ATTACKS[spellID] then memory.Did("s:" .. spellID) end
 end)
--- buying: items bought at this vendor; their stock is taken when the window closes (what you top up to)
+-- buying: items bought at this vendor with the count in the bags before; their stock is taken when the window closes
+-- (what you top up to), and only for items the bags gained (the server refuses a buy without gold or room)
 local boughtNow = {}
 ns.On("MERCHANT_CLOSED", function()
     local db = DB()
     if not db or not next(boughtNow) then return end
     local now = time()
-    for itemID in pairs(boughtNow) do
+    for itemID, before in pairs(boughtNow) do
         local count = C_Item.GetItemCount(itemID)
-        local record = Bump(db.bought, itemID, now, BUY_HALF_LIFE)
-        record[3] = record[3] and (record[3] + count) / 2 or count
-        memory.Did("i:" .. itemID)
+        if count > before then
+            local record = Bump(db.bought, itemID, now, BUY_HALF_LIFE)
+            record[3] = record[3] and (record[3] + count) / 2 or count
+            memory.Did("i:" .. itemID)
+        end
     end
     wipe(boughtNow)
 end)
 hooksecurefunc("BuyMerchantItem", function(index)
     local itemID = D.ItemIDFromLink(GetMerchantItemLink(index))
-    if itemID then boughtNow[itemID] = true end
+    if itemID and not boughtNow[itemID] then boughtNow[itemID] = C_Item.GetItemCount(itemID) end
 end)
--- items used from bags (the last of a stack is gone before this sees it, so it is not counted)
+-- items used from bags (the last of a stack is gone before this sees it, so it is not counted); the same call sells
+-- at a vendor, deposits in the bank and attaches to mail or a trade
+local function Shown(frame) return frame ~= nil and frame:IsShown() end
 hooksecurefunc(C_Container, "UseContainerItem", function(bag, slot)
+    if Shown(MerchantFrame) or Shown(BankFrame) or Shown(MailFrame) or Shown(TradeFrame) then return end
     local id = C_Container.GetContainerItemID(bag, slot)
     if id then memory.Did("i:" .. id) end
 end)
@@ -291,6 +298,9 @@ function memory.AllHidden()
     return db and db.hidden or {}
 end
 
+-- Forgetting
+
+-- whether the engine learned anything about an entry (the search offers to forget it)
 function memory.Knows(id)
     local db = DB()
     if not db or not id then return false end
@@ -299,8 +309,6 @@ function memory.Knows(id)
     end
     return db.did[id] ~= nil or db.skipped["do"][id] ~= nil or db.skipped.know[id] ~= nil
 end
-
--- Forgetting
 
 -- forgets one entry: its choices, what you did with it and its passing over
 -- (not hiding: that one you undo yourself)
@@ -314,19 +322,6 @@ function memory.Forget(id)
     db.did[id] = nil
     for _, kind in ipairs(KINDS) do db.skipped[kind][id] = nil end
     Changed()
-end
-
--- forgets every choice, everything done and passed over, and the learning (a host's "reset the weighting"); hidden stays hidden
-function memory.Reset()
-    local db = DB()
-    if not db then return end
-    for _, key in ipairs({ "chosen", "did", "bought" }) do wipe(db[key]) end
-    for _, kind in ipairs(KINDS) do
-        wipe(db.skipped[kind])
-        wipe(db.reasonStats[kind])
-    end
-    Changed()
-    D.BumpState("rec:learning")
 end
 
 function memory.Prune()

@@ -1,14 +1,18 @@
 local ns = select(2, ...).search
 local L = ns.L
 
--- What the bar shows and how one moves through it:
---   Tab/Shift+Tab/Up/Down   choose (also a category or filter result; in the detail view an option)
+-- What the bar shows and how one moves through it (the keys arrive from Input.lua):
+--   Tab/Shift+Tab/Up/Down   choose (also a category or filter result; in the detail view a preview row)
 --   Tab, empty bar          step through the categories; Ctrl+Tab/Ctrl+Shift+Tab: next/previous, text stays
 --   Escape                  in stages: the menu, back from a detail view or link list, the typed text; then close
---   Enter, Right            confirm: category -> its search, result -> detail view, in a detail view its menu (Space too)
---   Enter after typing      the first result or the one chosen with the keys (the mouse only points); nothing found in a category: same text in all
---   Left/Backspace on an empty bar (or in a detail view), the back arrow: back, the way you came (right click is for menus)
---   Ctrl+Enter              the action at once; Enter on an empty bar closes (after Up/Down it opens the marked one)
+--   Right, Enter            go deeper: category -> its search, result -> detail view; in a detail view Right
+--                           (and Space) opens its menu, Enter the marked preview row
+--   Enter after typing      the first result or the one chosen with the keys (the mouse only points);
+--                           nothing found in a category: same text in all
+--   Left/Backspace on an empty bar (or in a detail view), the back arrow: back, the way you came
+--                           (right click is for menus)
+--   Ctrl+Enter              the action at once; Enter on an empty bar closes (after Up/Down it opens the
+--                           marked one)
 -- Detail views and link lists are steps in history; categories and filter tokens are not.
 
 local S = ns.state
@@ -44,8 +48,11 @@ end
 -- what can be done with an entry (its menu): its links that have entries,
 -- then the tools that fit it
 local byRank = {}
+local optionsOf = {} -- entry -> its options until the next Refresh (the detail view and its menu ask both)
 local function Options(entry)
-    local options = {}
+    local options = optionsOf[entry]
+    if options then return options end
+    options = {}
     -- links in the order this kind of entry needs (Links\Order.lua), the others after as registered
     local rank = ns.LinkRank(entry)
     wipe(byRank)
@@ -70,6 +77,7 @@ local function Options(entry)
             options[#options + 1] = { kind = "tool", tool = tool, text = tool.label }
         end
     end
+    optionsOf[entry] = options
     return options
 end
 
@@ -104,6 +112,7 @@ end
 
 -- Shows the state. restored: an earlier state, whose marked result and scroll position are kept.
 function view.Refresh(restored)
+    wipe(optionsOf)
     if not S.detail and not S.linked then view.ApplyDefaults() end
     ui.RenderBar()
     if S.detail then
@@ -162,8 +171,9 @@ end
 local remembered = {} -- category key ("" for all) -> its plain filters
 local function ScopeKey(source) return source and source.key or "" end
 
--- A category's own filters (source.defaultFilters: Quests "In your log", Items "In bags") are set only while it is browsed without text,
--- so the list holds what the tab counts. Yours stay. If you take them away (Backspace, the filter window), they stay away until the search opens again.
+-- A category's own filters (source.defaultFilters: Quests "In your log", Items "In bags") are set only while it
+-- is browsed without text, so the list holds what the tab counts. Yours stay. If you take them away
+-- (Backspace, the filter window), they stay away until the search opens again.
 local auto = {}     -- filter -> true: set as a category's own, not by you
 local declined = {} -- category key -> true: you took its own filters away
 
@@ -220,7 +230,7 @@ end
 -- a fresh, empty search (when the bar opens). A category with filters of its own (source.defaultFilters)
 -- starts with only them each opening; switching between tabs keeps what you chose.
 function view.Reset()
-    if S.scope then Stash() end -- the category's filters survive closing
+    Stash() -- the category's filters survive closing (also those of "all": else Recall brings back stale ones)
     for _, source in ipairs(ns.sources) do
         if source.defaultFilters then remembered[ScopeKey(source)] = {} end
     end
@@ -235,7 +245,7 @@ end
 -- Steps
 
 -- a step outside the history (typing, a category, a filter): leaves a detail view or link list and
--- clears history (the detail view stayed while the tabs changed)
+-- clears history
 local function NewWay()
     if S.detail or S.linked then
         wipe(S.history)
@@ -364,7 +374,7 @@ end
 local function Chose(entry, amount)
     local id = entry and ns.EntryID(entry)
     if not id then return end
-    ns.memory.Chose(id, S.query, amount)
+    ns.memory.Chose(id, amount, S.query)
     ns.rec.Chose(id, amount, S.query)
     -- only in a list opened without text that suggests (a category's own, the start page; not a filtered
     -- A-Z list), and only for rows that stood there as suggestions, i.e. with a reason
@@ -479,6 +489,7 @@ end
 
 -- Typing: adds to the search text (from a detail view or link list: back to the search first)
 function view.Type(text)
+    if text == " " and S.query == "" then return end -- a leading space would only turn the start page into a search
     view.ToSearch()
     NewWay()
     S.query = S.query .. text

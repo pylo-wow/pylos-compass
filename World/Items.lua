@@ -1,21 +1,22 @@
 local _, D = ...
 
 -- Items: all game items (English names, Data\ItemNames_enUS.lua) with facts (Data\ItemFacts.lua)
--- and GetItemInfoInstant data. Built in the background (19,224 entries).
+-- and GetItemInfoInstant data. Built in the background.
 -- Also: kinds worth suggesting, items near a level, and whether you can use an item (D.ItemForYou).
+
+local KEY = "items"
 
 -- item ID -> packed facts (Data\ItemFacts.lua); freed after the build
 local facts
 
--- Memory: an entry keeps only name, item ID and packed facts (plus the build key), four fields
--- = exactly four table slots (six fields took eight; 0.55 KB per item, measured in game).
--- The rest is computed on demand via the domain metatable, from the packed facts or
--- GetItemInfoInstant. Storing all seventeen sized every entry for 32 fields (up to 70 MB).
+-- Memory: an entry keeps only name, item ID and packed facts (plus the build key): four fields
+-- fill a table's four slots exactly. The rest is computed on demand via the domain metatable,
+-- from the packed facts or GetItemInfoInstant; stored fields would cost tens of MB.
 local function Instant(entry, n) return (select(n, C_Item.GetItemInfoInstant(entry.itemID))) end
 
 -- D.fields.items exists before the domain registers (RegisterDomain keeps it)
-local fields = D.fields.items or {}
-D.fields.items = fields
+local fields = D.fields[KEY] or {}
+D.fields[KEY] = fields
 -- quality, required level, class mask (0: all), starts a quest (writs, letters: never suggested), item level
 fields.quality = function(entry) return entry.packed % 8 end
 fields.requiredLevel = function(entry) return math.floor(entry.packed / 8) % 128 end
@@ -30,15 +31,14 @@ fields.icon = function(entry) return Instant(entry, 5) end
 fields.itemClass = function(entry) return Instant(entry, 6) end
 fields.itemSubClass = function(entry) return Instant(entry, 7) end
 
-local meta -- D.Meta("items"), once the domain is registered
+local meta -- D.Meta(KEY), once the domain is registered
 
 local function AddItem(list, id, name)
     list[#list + 1] = setmetatable({ name = name, itemID = id, packed = facts[id] or 0 }, meta)
 end
 
 local function Facts(Pause)
-    if facts then return end
-    facts = {}
+    facts = {} -- fresh: a build that failed halfway may have left it part filled
     local list = D.itemFacts or {}
     for i = 1, #list, 2 do
         facts[list[i]] = list[i + 1]
@@ -47,10 +47,10 @@ local function Facts(Pause)
 end
 
 D.RegisterDomain({
-    key = "items",
+    key = KEY,
     background = true,
     collect = function(list, Pause)
-        meta = meta or D.Meta("items")
+        meta = meta or D.Meta(KEY)
         Facts(Pause)
         local count = 0
         for id, english in pairs(D.itemNamesEN or {}) do
@@ -63,7 +63,7 @@ D.RegisterDomain({
 })
 
 -- Kinds worth suggesting
--- Weapons, armour and some consumables; not explosives, devices, "Other" (Forever's sealed
+-- Weapons, armor and some consumables; not explosives, devices, "Other" (Forever's sealed
 -- writs and crates of crafting orders show up there), reagents, trade goods, recipes, quest
 -- items, keys, miscellaneous, bags, quivers or ammunition.
 -- item class -> true (all subclasses) or subclass -> true; IDs from DB2 ItemSubClass (build
@@ -89,8 +89,7 @@ function D.FoodBuffs(entry)
     local id = entry.itemID
     local known = buffs[id]
     if known ~= nil then return known end
-    local GetSpell = C_Item.GetItemSpell or GetItemSpell
-    local _, spellID = GetSpell(id)
+    local _, spellID = C_Item.GetItemSpell(id)
     if not spellID then
         if C_Item.IsItemDataCachedByID(id) then buffs[id] = false return false end
         C_Item.RequestLoadItemDataByID(id)
@@ -110,52 +109,51 @@ function D.IsFood(entry) return entry.itemClass == FOOD and entry.itemSubClass =
 
 local LEVEL_WINDOW = 5 -- required level from the level - 5 up to the level
 -- Items without a required level (most quest rewards) use an item level from level - ITEM_BELOW
--- to level + ITEM_ABOVE instead (otherwise they all dropped out)
+-- to level + ITEM_ABOVE instead
 local ITEM_BELOW, ITEM_ABOVE = 3, 5
 
 -- Suggestable items near a level, built once per level and build (one pass over all items):
 -- SUGGESTED kinds, required level within LEVEL_WINDOW below the level (or item level near it if none),
--- not junk, not quest starters, armour and weapons green or better.
--- Shared: do not change. Built in the background after the items are built and after each
--- level up, else on first ask.
+-- not junk, not quest starters, armor and weapons green or better.
+-- The returned list is shared: do not change it. Built in the background after the items are
+-- built and after each level up, else on first ask.
 local near, nearLevel, nearVersion = {}, nil, nil -- nearVersion: state "data:items" at build time
-local function NoPause() end
 local function Near(level, Pause)
-    local version = D.State("data:items")
+    local version = D.State("data:" .. KEY)
     local list = {}
     local lowest = math.max(level - LEVEL_WINDOW, 0)
-    for i, entry in ipairs(D.Entries("items")) do
+    for i, entry in ipairs(D.Entries(KEY)) do
         local required = entry.requiredLevel
         local fits = (required >= lowest and required <= level and required > 0)
             or (required <= 1 and entry.itemLevel >= level - ITEM_BELOW and entry.itemLevel <= level + ITEM_ABOVE)
-        if fits and entry.quality >= 1 and D.ItemSuggestedKind(entry)
-                and not entry.startsQuest and (entry.quality >= 2 or (entry.itemClass ~= 2 and entry.itemClass ~= 4)) then
+        if fits and entry.quality >= 1 and D.ItemSuggestedKind(entry) and not entry.startsQuest
+                and (entry.quality >= 2 or (entry.itemClass ~= 2 and entry.itemClass ~= 4)) then
             list[#list + 1] = entry
         end
         if i % 256 == 0 then Pause() end
     end
-    if version ~= D.State("data:items") then return end -- items rebuilt meanwhile
+    if version ~= D.State("data:" .. KEY) then return end -- items rebuilt meanwhile
     near, nearLevel, nearVersion = list, level, version
 end
 function D.ItemsNearLevel(level)
-    if nearLevel ~= level or nearVersion ~= D.State("data:items") then Near(level, NoPause) end
+    if nearLevel ~= level or nearVersion ~= D.State("data:" .. KEY) then Near(level, D.NoPause) end
     return near
 end
 local function Soon()
-    if D.Built("items") then
+    if D.Built(KEY) then
         D.Background("items near your level", function(Pause)
             local level = UnitLevel("player")
-            if nearLevel ~= level or nearVersion ~= D.State("data:items") then Near(level, Pause) end
+            if nearLevel ~= level or nearVersion ~= D.State("data:" .. KEY) then Near(level, Pause) end
         end)
     end
 end
-D.OnBuilt(function(key) if key == "items" then Soon() end end)
+D.OnBuilt(function(key) if key == KEY then Soon() end end)
 D.OnState("level", Soon)
 
 -- For you
--- Usable now: level reached, class allowed (Data\ItemFacts.lua), armour/weapon kind learned.
+-- Usable now: level reached, class allowed (Data\ItemFacts.lua), armor/weapon kind learned.
 -- Kinds come from known proficiency spells (Plate Mail, Swords, ...), so untrained weapon
--- skills do not count. If none of these spells exist in the client, kinds are not checked.
+-- skills do not count. If you know none of these spells, kinds are not checked.
 
 local ARMOR, WEAPON = 4, 2 -- item classes
 local ARMOR_SPELLS = { [1] = 9078, [2] = 9077, [3] = 8737, [4] = 750, [6] = 9116 } -- cloth .. shield
@@ -170,9 +168,7 @@ local level, classBit, classFile
 local known, checkKinds = {}, false -- spell ID -> true; are the kinds checked
 local prepared = D.Cache({ "frame" }) -- renewed: not prepared yet this frame
 
-local function SpellKnown(spellID)
-    return IsPlayerSpell(spellID) or (IsSpellKnown ~= nil and IsSpellKnown(spellID))
-end
+local SpellKnown = D.SpellKnown -- (World\Spells.lua loads first)
 
 local function KindAllowed(entry)
     local spells = entry.itemClass == ARMOR and ARMOR_SPELLS or entry.itemClass == WEAPON and WEAPON_SPELLS
@@ -206,7 +202,7 @@ function D.ItemForYouPrepare()
     end
 end
 
--- Can you use the item now (level, class, armour/weapon kind)
+-- Can you use the item now (level, class, armor/weapon kind)
 function D.ItemForYou(entry)
     local _, renewed = prepared.Get()
     if renewed then D.ItemForYouPrepare() end

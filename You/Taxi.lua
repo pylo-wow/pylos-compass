@@ -24,7 +24,7 @@ end
 D.On("TAXIMAP_OPENED", function()
     local known = Known()
     local mapID = D.MapUp(C_Map.GetBestMapForUnit("player"), 2)
-    if not known or not mapID or not (C_TaxiMap and C_TaxiMap.GetAllTaxiNodes) then return end
+    if not known or not mapID then return end
     local learned = false
     for _, node in ipairs(C_TaxiMap.GetAllTaxiNodes(mapID) or {}) do
         local id, state = node.nodeID, node.state

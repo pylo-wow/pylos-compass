@@ -2,12 +2,13 @@ local _, D = ...
 local ns = D.engine
 local L = ns.L
 
--- Nearby (knowing): what is around you, lightly so that real reasons stand above: NPCs whose name plates show, NPCs with
--- a service whose spot lies within NEAR yards, a dungeon entrance within NEAR_ENTRANCE yards. Always below every other
--- reason (at most SCALE, the lightest weight: below a fading lookup); nearer is a little stronger.
+-- Nearby (knowing): what is around you, lightly so that real reasons stand above: NPCs whose name plates show, NPCs
+-- with a role (vendor, repairer, ...) whose spot lies within NEAR yards, a dungeon entrance within NEAR_ENTRANCE
+-- yards. Always below every other reason (at most SCALE, the lightest weight: below a fading lookup); nearer is a
+-- little stronger.
 
 local NEAR, NEAR_ENTRANCE = 80, 300 -- yards
-local SCALE = 0.06 -- (a repeated lookup starts at 0.08: LookedUp.lua)
+local SCALE = 0.06 -- a repeated lookup starts at 0.08 (LookedUp.lua)
 local PLATE = 0.6 -- a name plate's share of SCALE (no distance known)
 
 local plates = {} -- name plate unit -> NPC ID
@@ -63,8 +64,9 @@ end
 
 ns.RegisterReason({
     key = "nearby",
-    -- weight 0.7 (the lightest), strength at most SCALE: only fills in below the real reasons
-    stage = "know", weight = 0.7, label = "Nearby", learn = false,
+    -- weight 0.7: the lightest, strength at most SCALE; it only fills in below the real reasons
+    stage = "know", weight = 0.7, label = "Nearby",
+    learn = false, -- a background hint, not a suggestion to follow
     kind = "know",
     sources = { "npcs", "dungeons" },
     depends = { "rec:nearby", "position", "zone", "npcs", "data" },
@@ -73,5 +75,6 @@ ns.RegisterReason({
     end,
     test = function(entry) return Near()[entry] end,
     reach = function() return ns.reach.NOW, nil end,
+    errand = false,
     note = function() return L["Nearby"] end,
 })

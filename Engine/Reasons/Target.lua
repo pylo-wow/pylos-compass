@@ -5,7 +5,7 @@ local L = ns.L
 -- Target (knowing): the NPC you target. Who it is, what it sells, drops or teaches is the first thing you might want to
 -- look up about it. Strength 1 while it is your target.
 
-local targetID -- the NPC ID of your target; per search
+local targetID -- the NPC ID of your target; see prepare
 
 ns.RegisterReason({
     key = "target",

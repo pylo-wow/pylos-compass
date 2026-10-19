@@ -15,7 +15,9 @@ local ns = select(2, ...).search
 -- An exact name stays first: learning lifts nothing past it unless chosen after exactly this text.
 -- The fit (80) never passes a better match (100 more).
 -- Equal points: shorter name, then A-Z, then an item before the rest (herb Peacebloom before its
--- node), then lower item ID. Lists opened without text have the engine's own order.
+-- node), then lower item ID, then the entry ID. Lists opened without text: a category's browse keeps its own
+-- order, the start page the engine's; filters set without text are ranked here (owned, used, fit) unless a
+-- filter has an order.
 local rank = {}
 ns.rank = rank
 
@@ -84,9 +86,9 @@ local function WholeWord(text, word)
     end
 end
 
--- the typed words (Index.lua, ns.index.Words) of this sort, with a space before each
+-- the typed words (Index.lua, ns.index.Words) of this sort; spaced: each with a space before it
 local words, joined, spaced = nil, nil, {}
-local typedAlone = {} -- { the text } when it is one word as typed (the extra words compared)
+local typedAlone = {} -- { the text } when it is one word as typed (ExtraMatch compares it with the extra words)
 
 -- several words in any order: all start words of the name (the whole name if it has no other
 -- words), or some sit in the category or the extra words
@@ -110,7 +112,7 @@ local function WordsMatch(entry)
 end
 
 -- every typed word is one of the entry's extra words (a role, a short name)
-local function ExtraMatch(entry, query)
+local function ExtraMatch(entry)
     local extra = ns.index.ExtraOf(entry)
     if not extra then return 0 end
     for _, word in ipairs(words or typedAlone) do
@@ -124,7 +126,7 @@ local function Match(entry, query)
     if score == MATCH_EXACT then return score end
     if joined then score = math.max(score, MatchText(entry.key, joined)) end
     if words then score = math.max(score, WordsMatch(entry)) end
-    return math.max(score, ExtraMatch(entry, query))
+    return math.max(score, ExtraMatch(entry))
 end
 
 local function Owned(entry)
@@ -140,7 +142,10 @@ local function Better(a, b)
     if #a.key ~= #b.key then return #a.key < #b.key end
     if a.key ~= b.key then return a.key < b.key end
     -- same name: an item first (the herb, not its node as an NPC), then the lower ID
-    return (a.itemID or math.huge) < (b.itemID or math.huge)
+    local ia, ib = a.itemID or math.huge, b.itemID or math.huge
+    if ia ~= ib then return ia < ib end
+    -- still equal (an NPC and a quest of one name): the ID, so the order does not change between searches
+    return (ns.EntryID(a) or "") < (ns.EntryID(b) or "")
 end
 
 local best = {}

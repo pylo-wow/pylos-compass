@@ -27,15 +27,13 @@ local Secret = D.Secret
 local MIN_LOOTS = 10 -- corpses looted before the drops seen replace the 1.12 ones
 local ROLE = D.NPC_ROLE
 local RANKS = { elite = 1, rareelite = 2, worldboss = 3, rare = 4, normal = 0, trivial = 0, minus = 0 }
--- UnitCreatureType answers in the client's language (a German client returned "Wildtier"):
--- English names plus the client's own names for the same IDs
+-- UnitCreatureType answers in the client's language: English names plus the client's own
+-- names for the same IDs
 local TYPES = { Beast = 1, Dragonkin = 2, Demon = 3, Elemental = 4, Giant = 5, Undead = 6, Humanoid = 7,
     Critter = 8, Mechanical = 9, ["Not specified"] = 10, Totem = 11 }
-if C_CreatureInfo and C_CreatureInfo.GetCreatureTypeInfo then
-    for id = 1, 11 do
-        local info = C_CreatureInfo.GetCreatureTypeInfo(id)
-        if info and info.name and info.name ~= "" then TYPES[info.name] = id end
-    end
+for id = 1, 11 do
+    local info = C_CreatureInfo.GetCreatureTypeInfo(id)
+    if info and info.name and info.name ~= "" then TYPES[info.name] = id end
 end
 
 function D.Learned(npcID)
@@ -70,10 +68,11 @@ local function Without(text, npcID)
     return #parts > 0 and table.concat(parts, ",") or nil
 end
 
--- A new place bumps the state "npcs" so per-place caches are rebuilt
+-- A new place bumps the states "npcs" and "places" (the neighbour index of Reach.lua depends on places only)
 local function ApplyPlace(npcID, learned)
     if learned.place and D.npcPlaces[npcID] ~= learned.place then
         D.npcPlaces[npcID] = learned.place
+        D.BumpState("places")
         D.BumpState("npcs")
     end
 end
@@ -126,7 +125,7 @@ local function ApplyDrops(npcID, learned)
         end
         old[itemID] = nil
     end
-    for itemID in pairs(old) do -- no longer listed
+    for itemID in pairs(old) do -- in the old list only: not seen dropping
         D.itemDroppedBy[itemID] = Without(D.itemDroppedBy[itemID], npcID)
         changed = true
     end
@@ -153,19 +152,19 @@ local ORIGIN = {
     end,
     place = function(entry, learned)
         if learned and learned.place then return "seen" end
-        return D.npcPlaces and D.npcPlaces[entry.npcID] and "1.12" or nil
+        return D.npcPlaces[entry.npcID] and "1.12" or nil
     end,
     drops = function(entry, learned)
         if learned and (learned.loots or 0) >= MIN_LOOTS and learned.drops then return "seen" end
-        return D.npcDrops and D.npcDrops[entry.npcID] and "1.12" or nil
+        return D.npcDrops[entry.npcID] and "1.12" or nil
     end,
     sells = function(entry, learned)
         if learned and learned.sells then return "seen" end
-        return D.npcSells and D.npcSells[entry.npcID] and "1.12" or nil
+        return D.npcSells[entry.npcID] and "1.12" or nil
     end,
     trains = function(entry, learned)
         if learned and learned.teachesFull then return "seen" end
-        return D.npcTrainers and D.npcTrainers[entry.npcID] and "1.12" or nil
+        return D.npcTrainers[entry.npcID] and "1.12" or nil
     end,
 }
 function D.NPCOrigin(entry, what)
@@ -198,21 +197,21 @@ local WINDOW_ROLES = {
     QUEST_DETAIL = ROLE.QUEST_GIVER, QUEST_PROGRESS = ROLE.QUEST_GIVER, QUEST_COMPLETE = ROLE.QUEST_GIVER,
 }
 
+-- true if the role is new
 local function AddRole(learned, role)
     local roles = learned.roles or 0
-    if math.floor(roles / role) % 2 == 0 then learned.roles = roles + role end
+    if math.floor(roles / role) % 2 == 0 then
+        learned.roles = roles + role
+        return true
+    end
+    return false
 end
 
 -- Stock of a ware on offer: -1 unlimited, else the stock left (0: sold out); nil if unknown
--- (C_MerchantFrame.GetItemInfo numAvailable, else GetMerchantItemInfo's 5th value)
+-- (C_MerchantFrame.GetItemInfo numAvailable)
 local function OnOffer(index)
-    local available
-    if C_MerchantFrame and C_MerchantFrame.GetItemInfo then
-        local info = C_MerchantFrame.GetItemInfo(index)
-        available = info and info.numAvailable
-    elseif GetMerchantItemInfo then
-        available = select(5, GetMerchantItemInfo(index))
-    end
+    local info = C_MerchantFrame.GetItemInfo(index)
+    local available = info and info.numAvailable
     if Secret(available) then return nil end
     return available
 end
@@ -232,7 +231,7 @@ local function Limited(before, now)
     return table.concat(ids, ",")
 end
 
--- What a vendor sells: its window's items (of the data's items) and which have limited stock
+-- What a vendor sells: its window's items (of the data's items) and which have limited stock; true if that is news
 local function NoteSells(npcID, learned)
     local items, seen, stock = {}, {}, {}
     for index = 1, GetMerchantNumItems() or 0 do
@@ -243,10 +242,11 @@ local function NoteSells(npcID, learned)
             stock[itemID] = OnOffer(index)
         end
     end
-    if #items == 0 then return end -- items not loaded yet (MERCHANT_UPDATE follows)
+    if #items == 0 then return false end -- items not loaded yet (MERCHANT_UPDATE follows)
     table.sort(items)
     local sells = table.concat(items, ",")
-    if sells ~= learned.sells then
+    local changed = sells ~= learned.sells
+    if changed then
         learned.sells = sells
         ApplySells(npcID, learned)
     end
@@ -255,7 +255,11 @@ local function NoteSells(npcID, learned)
     for part in limited:gmatch("[^,]+") do
         if seen[tonumber(part:match("^(%d+)"))] then kept[#kept + 1] = part end
     end
-    learned.limited = table.concat(kept, ",")
+    local keptText = table.concat(kept, ",")
+    if keptText ~= learned.limited then
+        learned.limited, changed = keptText, true
+    end
+    return changed
 end
 
 -- Most of an item a vendor has on offer at once (limited stock, restocks over time); nil if
@@ -263,7 +267,7 @@ end
 function D.VendorStock(npcID, itemID)
     local learned = D.Learned(npcID)
     local text = learned and learned.limited
-    if text == nil then text = D.npcLimited and D.npcLimited[npcID] end
+    if text == nil then text = D.npcLimited[npcID] end
     if not text or text == "" then return nil end
     local most = ("," .. text):match("," .. itemID .. ":(%d+)")
     return most and tonumber(most) or nil
@@ -274,24 +278,26 @@ local function Talked(event)
     local npcID = D.NPCOf("npc")
     local learned = Note(npcID)
     if not learned then return end
+    local changed = false -- MERCHANT_UPDATE comes with every sale, buy and repair: bump only for news
     local spot = D.PlayerPlace()
     if spot and spot ~= learned.place then
         learned.place = spot
         ApplyPlace(npcID, learned)
+        changed = true
     end
     local role = WINDOW_ROLES[event]
-    if role then AddRole(learned, role) end
+    if role and AddRole(learned, role) then changed = true end
     if event == "MERCHANT_SHOW" or event == "MERCHANT_UPDATE" then
-        AddRole(learned, ROLE.VENDOR)
-        if CanMerchantRepair() then
-            AddRole(learned, ROLE.REPAIR)
-            learned.noRepair = nil
-        else
-            learned.noRepair = true
+        if AddRole(learned, ROLE.VENDOR) then changed = true end
+        local repair = CanMerchantRepair()
+        if repair and AddRole(learned, ROLE.REPAIR) then changed = true end
+        local noRepair = not repair or nil
+        if learned.noRepair ~= noRepair then
+            learned.noRepair, changed = noRepair, true
         end
-        NoteSells(npcID, learned)
+        if NoteSells(npcID, learned) then changed = true end
     end
-    D.BumpState("npcs") -- place, roles or wares may be new (rare)
+    if changed then D.BumpState("npcs") end
 end
 for _, event in ipairs({ "GOSSIP_SHOW", "MERCHANT_SHOW", "MERCHANT_UPDATE", "TRAINER_SHOW", "TRAINER_UPDATE",
         "TAXIMAP_OPENED", "BANKFRAME_OPENED", "AUCTION_HOUSE_SHOW", "QUEST_GREETING", "QUEST_DETAIL", "QUEST_PROGRESS",
@@ -319,7 +325,7 @@ local function Met(npcID)
     else
         return
     end
-    -- Update only the two zones' NPC lists (D.NPCsInZone); a full pass per NPC met cost ~8 ms per refresh
+    -- update only the two zones' NPC lists (D.NPCsInZone), not a full pass
     D.NPCMoved(npcID, before)
     D.BumpState("npcs")
 end
@@ -340,9 +346,9 @@ local function Pointed(unit, guid, npcID)
     readAt[guid], reads = now, reads + 1
     local learned = Note(npcID)
     if not learned then return end
-    local was1, was2, was3, was4 = learned.levelMin, learned.levelMax, learned.rank, learned.type
+    local wasMin, wasMax, wasRank, wasType = learned.levelMin, learned.levelMax, learned.rank, learned.type
     local side = UnitFactionGroup("player") or "?"
-    local was5 = learned.reaction and learned.reaction[side]
+    local wasReaction = learned.reaction and learned.reaction[side]
     if level and level > 0 then -- -1: too high to tell (skull)
         learned.levelMin = math.min(learned.levelMin or level, level)
         learned.levelMax = math.max(learned.levelMax or level, level)
@@ -353,8 +359,8 @@ local function Pointed(unit, guid, npcID)
     end
     if class and RANKS[class] then learned.rank = RANKS[class] end
     if kind and TYPES[kind] then learned.type = TYPES[kind] end
-    if was1 ~= learned.levelMin or was2 ~= learned.levelMax or was3 ~= learned.rank or was4 ~= learned.type
-            or was5 ~= (learned.reaction and learned.reaction[side]) then
+    if wasMin ~= learned.levelMin or wasMax ~= learned.levelMax or wasRank ~= learned.rank
+            or wasType ~= learned.type or wasReaction ~= (learned.reaction and learned.reaction[side]) then
         D.BumpState("npcs")
     end
 end
@@ -381,7 +387,7 @@ D.On("UPDATE_MOUSEOVER_UNIT", function() Seen("mouseover") end)
 -- corpse GUID -> true: counted once (skinning reopens it); reset at LOOTED_KEEP
 local LOOTED_KEEP = 200
 local looted, lootedCount = {}, 0
--- Also in dungeons (boss loot); secret values are skipped.
+-- Also in dungeons (boss loot); secret values are skipped
 D.On("LOOT_OPENED", function()
     if not D.world then return end
     local counted = {} -- npcID -> true: this corpse's NPC counted

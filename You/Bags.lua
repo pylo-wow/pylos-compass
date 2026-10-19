@@ -4,15 +4,22 @@ local _, D = ...
 
 D.ownedItems = {} -- item ID -> true: in your bags or worn
 D.bagItems = {}   -- item ID -> true: in your bags
+-- item ID -> its link in your bags (only a link carries random stats, "of the Wolf").
+-- shortcut: one stack's link per ID, upgrade to a list if two stacks of one ID with different random stats matter
+D.bagLinks = {}
 local scanned = D.Cache({ "bags", "gear" })
 
 local function ScanOwned()
     wipe(D.ownedItems)
     wipe(D.bagItems)
+    wipe(D.bagLinks)
     for bag = 0, 5 do -- backpack, four bags, reagent bag
         for slot = 1, C_Container.GetContainerNumSlots(bag) or 0 do
-            local id = C_Container.GetContainerItemID(bag, slot)
-            if id and id > 0 then D.ownedItems[id], D.bagItems[id] = true, true end
+            local info = C_Container.GetContainerItemInfo(bag, slot)
+            local id = info and info.itemID
+            if id and id > 0 then
+                D.ownedItems[id], D.bagItems[id], D.bagLinks[id] = true, true, info.hyperlink
+            end
         end
     end
     -- slot 0 (ammunition) may answer 0 for "no item"

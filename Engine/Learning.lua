@@ -10,48 +10,39 @@ local ns = D.engine
 --            beside the one made, an abandoned quest (Learning\Declined.lua)
 --   did      a suggestion followed: chosen in the search, done in the game (crafted, cast, used, bought: Memory.lua),
 --            NPC talked to, spell or recipe learned, item put on, dungeon entered
--- What a host shows as a suggestion (learning.Shown) waits WINDOW with its reasons: acted on by then, "did" for each;
--- otherwise it is let go without counting.
+-- What the search or the window shows as a suggestion (learning.Shown) waits WINDOW with its reasons: acted on by then,
+-- "did" for each; otherwise it is let go without counting. A suggestion shown in combat does not wait.
 -- Each reason gets a personal weight x0.5 to x1.5 (Reasons.lua multiplies it in): reasons you follow more than others
 -- of their kind rise, those you turn down sink, never below half so something new still comes up. Each kind ("do": the
--- window; "know": a host's search lists) learns on its own, with its own overall rate. Everything halves every month.
--- Not in combat or instances. Only counts are kept (PylosCompassEngineDB.reasonStats: kind -> reason -> { hits, misses, time }).
+-- window; "know": the search's lists) learns on its own, with its own overall rate. Everything halves every month.
+-- Only counts are kept (PylosCompassEngineDB.reasonStats: kind -> reason -> { hits, misses, time }).
 -- Not learned from being followed (reason field learn = false), only from your word and choices:
---   questNeed  killing and looting leave no sure sign
---   upgrade    most cannot be put on within half an hour (quest reward, dungeon drop): Learning\Upgrades.lua watches instead
---   lookedUp   it is the lookups themselves: choosing one again is no sign
+--   questNeed, rareNearby  killing and looting leave no sure sign
+--   upgrade, equip         Learning\Upgrades.lua watches what you do with upgrades instead (most cannot be put on
+--                          within half an hour: quest reward, dungeon drop)
+--   lookedUp               it is the lookups themselves: choosing one again is no sign
+--   nearby                 it only fills in below the real reasons
 -- "Bad suggestion" also sinks that entry at once.
 
 local learning = {}
 ns.learning = learning
 
-local VERSION = 3               -- of the saved learning (learning.Load)
 local WINDOW = 30 * 60          -- seconds a suggestion waits to be followed
 local EXPIRE_EVERY = 60         -- seconds between looks at what waited too long
-local HALF_LIFE = 30 * 86400
+local HALF_LIFE = 30 * 86400        -- seconds: counts halve
 local PRIOR = 5                 -- observations it takes before a reason's own rate counts much
 local LOW, HIGH = 0.5, 1.5
 local EVIDENCE = { told = 3, chose = 2, did = 1 }
 local BAD_SKIPS = 6             -- "Bad suggestion" tires the entry as six passings over
-learning.WINDOW, learning.HALF_LIFE, learning.EVIDENCE = WINDOW, HALF_LIFE, EVIDENCE
+learning.WINDOW, learning.HALF_LIFE = WINDOW, HALF_LIFE
 
-local pending = {}      -- entry ID -> { at = time(), reasons = { key = true }, spellID }
+local pending = {}      -- entry ID -> { at = time(), reasons = { key = true }, spellID, rank }
 local multipliers = { ["do"] = {}, know = {} } -- kind -> reason key -> personal weight
 local expiredAt = 0
 
--- Brings the saved learning up to date (at load). Version 3: per kind, only told/chose/did; the old counts (with
--- "ignored" misses, both kinds mixed) are dropped, old skipped data is kept as the search's.
-function learning.Load()
-    local db = ns.db
-    if db.learningVersion >= VERSION then return end
-    db.reasonStats = { ["do"] = {}, know = {} }
-    if not db.skipped["do"] then db.skipped = { ["do"] = {}, know = db.skipped } end
-    db.learningVersion = VERSION
-end
-
 local function Stats(kind) return ns.db and ns.db.reasonStats[kind] end
 
--- the kind a reason's counts are kept under: its own; for reasons of both kinds (questNeed) the kind suggested
+-- the kind a reason's counts are kept under: its own; for a reason of both kinds the kind suggested
 local function KindOf(key, kind)
     local reason = ns.reasons.All()[key]
     local own = reason and reason.kind
@@ -77,7 +68,8 @@ local function Count(key, hit, evidence, kind)
     D.BumpState("rec:learning") -- the personal weights change (Reasons.lua keeps results by it)
 end
 
--- personal weights from the counts: each reason's follow rate vs. the overall rate of its kind; few signs stay near 1 (PRIOR)
+-- personal weights from the counts: each reason's follow rate vs. the overall rate of its kind; few signs stay near 1
+-- (PRIOR)
 function learning.Refresh()
     for kind, list in pairs(multipliers) do
         wipe(list)
@@ -180,7 +172,8 @@ function learning.Feedback(entry, good, kind)
     ns.Log(good and "good" or "bad", id, table.concat(keys, " "))
 end
 
--- a sign seen elsewhere (Learning\Upgrades.lua): a reason's hit or miss; evidence a key of EVIDENCE; id and words for the log
+-- a sign seen elsewhere (Learning\Upgrades.lua): a reason's hit or miss; evidence a key of EVIDENCE; id and words for
+-- the log
 function learning.Observe(key, hit, evidence, id, words)
     if not ns.db then return end
     Count(key, hit, evidence)
@@ -208,7 +201,7 @@ function learning.Pending() return pending end
 
 D.OnState("spells", function()
     for id, waiting in pairs(pending) do
-        if waiting.spellID and IsPlayerSpell and IsPlayerSpell(waiting.spellID) then Followed(id) end
+        if waiting.spellID and D.SpellKnown(waiting.spellID) then Followed(id) end
     end
 end)
 D.OnState("gear", function()
@@ -225,7 +218,7 @@ D.OnState("zone", function()
         if lastZone then Followed("z:" .. zone) end
         lastZone = zone
     end
-    if not (IsInInstance and IsInInstance()) or not GetInstanceInfo then return end
+    if not IsInInstance() then return end
     local instanceID = select(8, GetInstanceInfo())
     if instanceID then Followed("d:" .. instanceID) end
 end)

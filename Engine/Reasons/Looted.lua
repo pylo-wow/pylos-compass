@@ -2,14 +2,14 @@ local _, D = ...
 local ns = D.engine
 local L = ns.L
 
--- Looted (knowing): an item new in your bags that this character never had before: what is it? Strongest right after it
--- came, fading to nothing within FRESH; junk (grey) left out. Items ever had are kept per character
--- (PylosCompassEngineDB.seenItems); a character's first look only takes in what it has, nothing counts as new then. An item
--- that starts a quest counts more (easily missed in the bags).
+-- Looted (knowing): an item new in your bags that this character never had before: what is it? Strongest right after
+-- it came, fading to nothing within FRESH; junk (grey) left out. Items ever had are kept per character
+-- (PylosCompassEngineDB.seenItems); a character's first look only takes in what it has, nothing counts as new then.
+-- An item that starts a quest counts more (easily missed in the bags).
 
-local FRESH = 15 * 60 -- seconds an item counts as new
-local STARTS_QUEST = 1.5 -- an item that starts a quest: this much stronger
-local fresh = {}      -- item ID -> time() it came (this session)
+local FRESH = 15 * 60       -- seconds an item counts as new
+local STARTS_QUEST = 1.5   -- an item that starts a quest: this much stronger
+local fresh = {}           -- item ID -> time() it came (this session)
 
 local function Look()
     local db = ns.db
@@ -34,14 +34,7 @@ end
 D.OnState("bags", Look)
 
 local function Newness(itemID)
-    local came = fresh[itemID]
-    if not came then return nil end
-    local share = 1 - (time() - came) / FRESH
-    if share <= 0 then
-        fresh[itemID] = nil
-        return nil
-    end
-    return share
+    return ns.Fade(fresh, itemID, fresh[itemID], FRESH)
 end
 
 ns.RegisterReason({
@@ -50,7 +43,7 @@ ns.RegisterReason({
     stage = "know", label = "Looted",
     kind = "know",
     sources = { "items" },
-    depends = { "bags" }, -- (fading with time: kept at most STALE seconds, Reasons.lua)
+    depends = { "bags" }, -- fades with time: kept at most STALE seconds (Reasons.lua)
     -- bags looked at here too: the state's listener runs a frame later, so a list computed before kept the old bags
     prepare = Look,
     candidates = function(add)

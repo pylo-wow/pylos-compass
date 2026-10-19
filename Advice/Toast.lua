@@ -6,8 +6,9 @@ local push = ns.push
 -- Nudge display (Push.lua decides when and how loud).
 --   quiet   minimap button glows until the window opens; the topic's tab gets a dot until viewed
 --   medium  note left of the minimap; fades after MEDIUM_FOR s unless hovered (answer "ignored")
---   loud    same note at the top of the screen with a sound, until answered or its reason goes
--- A click equips the item / targets the rare (secure button, out of combat) / sets a waypoint; combat hides the note (a secure button cannot stay).
+--   loud    same note at the top of the screen, with a sound unless switched off, until answered or its reason goes
+-- A click equips the item / targets the rare (secure button, out of combat) / sets a waypoint; combat hides the note
+-- (a secure button cannot stay).
 
 local MEDIUM_FOR = 8
 local WIDTH = { [push.MEDIUM] = 320, [push.LOUD] = 380 }
@@ -144,7 +145,8 @@ end
 
 -- Quiet: minimap button glow (ns.SetAlert)
 local openedAt = 0
--- Window opened (Window.lua): the glow is done. Returns the topic of the newest quiet nudge so the window opens at its tab.
+-- Window opened (Window.lua): the glow is done. Returns the topic of the newest quiet nudge so the window opens at
+-- its tab.
 function push.WindowOpened()
     local topic = push.NewestQuietTopic(openedAt)
     openedAt = time()
@@ -159,7 +161,7 @@ function push.QuietChanged()
     if ns.WindowDots then ns.WindowDots() end
 end
 
--- sample nudge per level (debug window)
+-- a sample nudge per level (developer tools)
 function push.Sample(level)
     local rule = { key = "sample", label = "Sample", level = level, sample = true }
     local c = { situation = "sample:" .. level .. ":" .. time(), title = L["Rare nearby: %s"]:format("Sample"),

@@ -2,9 +2,9 @@ local ns = select(2, ...).search
 local L = ns.L
 local D = ns.data
 
--- All items of the game, with the item's subtype on the right (searchable; how many you carry is
--- added when shown). Entries and facts come from Data (World\Items.lua). The action uses the
--- item, if you carry it.
+-- Items: all items of the game, with the item's subtype on the right (searchable; how many you carry is
+-- added when shown). Entries and facts come from the data layer (World\Items.lua). Action: use the item,
+-- if you carry it.
 
 -- what the list's rows and the action need (the search's own fields)
 D.AddField("items", "type", function() return "item" end)
@@ -12,7 +12,7 @@ D.AddField("items", "value", function(entry) return "item:" .. entry.itemID end)
 
 -- Subcategories (tabs beside the list): item kinds by the game's item class (GetItemInfoInstant, known
 -- for every item at once), merged into seven: classic has about twelve, too many for the window.
---   0 consumable, 1 container, 2 weapon, 3 gem, 4 armour, 5 reagent,
+--   0 consumable, 1 container, 2 weapon, 3 gem, 4 armor, 5 reagent,
 --   6 projectile, 7 trade goods, 8 item enhancement, 9 recipe, 11 quiver,
 --   12 quest, 13 key, 15 miscellaneous
 local KINDS = {
@@ -42,9 +42,7 @@ ns.RegisterFilter({
     test = function(entry) return not known[entry.itemClass] end,
 })
 
--- Opened without text as the quests are: "In bags" set (defaultFilters), everything that passes A-Z;
--- with no filter (a tab or a quality alone is none, Index.lua) an empty list with the hint.
--- Line below an item's name: armour its slot and material ("Hands · Mail"; rings, necks and cloaks only
+-- Line below an item's name: armor its slot and material ("Hands · Mail"; rings, necks and cloaks only
 -- the slot), else its subtype ("Two-Handed Maces"); the slot name is the game's own (INVTYPE_HAND).
 local function Describe(entry)
     local parts = {}
@@ -97,12 +95,20 @@ end
 
 local pool = {}
 
+-- Opened without text: "In bags" set (defaultFilters) and what passes it; with no filter (a tab or a
+-- quality alone is none, Index.lua) an empty list with the hint.
 local HINT = L["Type to search, or pick a filter."]
 local function Browse() return HINT end
 
 ns.RegisterSource({
     key = "items",
     domain = "items",
+    name = L["Items"],
+    hint = L["Search items"],
+    emptyHint = HINT,
+    icon = "Interface\\Icons\\INV_Misc_Bag_08",
+    iconAtlas = "bags-up-c60", -- WoW Forever's backpack of the bag bar (icon is the fallback)
+    actionLabel = L["use"],
     owned = function(entry) return D.ownedItems[entry.itemID] end,
     pool = function()
         wipe(pool)
@@ -110,13 +116,7 @@ ns.RegisterSource({
         for id in pairs(D.ownedItems) do pool[#pool + 1] = D.ItemByID(id) end
         return pool
     end,
-    name = L["Items"],
-    hint = L["Search items"],
-    emptyHint = HINT,
     defaultFilters = { "inBags" },
-    icon = "Interface\\Icons\\INV_Misc_Bag_08",
-    iconAtlas = "bags-up-c60", -- WoW Forever's backpack of the bag bar (the icon if the client lacks it)
-    actionLabel = L["use"],
     browse = Browse,
     describe = Describe,
     state = State,

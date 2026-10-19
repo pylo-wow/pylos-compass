@@ -3,10 +3,10 @@ local L = ns.L
 local D = ns.data
 
 -- NPCs: every NPC of the server, with the title on the right ("Blacksmithing Trainer"), or the creature
--- type where there is none. Entries and facts come from Data (World\NPCs.lua). Opened without
+-- type where there is none. Entries and facts come from the data layer (World\NPCs.lua). Opened without
 -- text: the NPCs of the zone you are in. No action.
 
--- creature type names, tooltip lines and level text: Data (World\Lines.lua), shared with the recommendations
+-- creature type names, tooltip lines and level text: World\Lines.lua, shared with the recommendations
 local TYPES = D.NPC_TYPE_NAMES
 local ZoneNames, LevelText = D.NPCZoneNames, D.NPCLevelText
 
@@ -44,9 +44,9 @@ local function Describe(entry)
 end
 
 -- Row state (UI\List.lua): an NPC with a service (vendor, trainer, quest giver ...) stands at its spot:
--- how far it is. One you can attack spawns in many places (a single spot said "170 yd" for the mob you
--- target): its level in the colour of how hard it is for you. One present only during a world event not
--- running now: the event, grey (D.EventAway).
+-- how far it is. One you can attack spawns in many places (no single distance): its level in the color of
+-- how hard it is for you. One present only during a world event not running now: the event, grey
+-- (D.EventAway).
 local function State(entry)
     local away = D.EventAway(entry)
     if away then return away, "done" end
@@ -77,32 +77,32 @@ local function ForYou(entry, add)
     end
     for _, questID in ipairs(taken or {}) do
         if C_QuestLog.IsOnQuest(questID) == true then
-            if C_QuestLog.IsComplete and C_QuestLog.IsComplete(questID) then ready = ready + 1 else toTurnIn = toTurnIn + 1 end
+            if C_QuestLog.IsComplete(questID) then
+                ready = ready + 1
+            else
+                toTurnIn = toTurnIn + 1
+            end
         end
     end
     if ready > 0 then add(L["Quests ready to turn in here: %d"]:format(ready), "good") end
     if toTake > 0 then add(L["Quests for you: %d"]:format(toTake), "good") end
     if toTurnIn > 0 then add(L["Quests of your log turned in here: %d"]:format(toTurnIn), "active") end
     local teaches = D.npcTrainers and D.npcTrainers[entry.npcID]
-    if not teaches then return end
+    local found = teaches and ns.TrainerTeaches(teaches)
+    if not found then return end
     local count = 0
+    for _, e in ipairs(found) do
+        if D.LearnableNow(e) then count = count + 1 end
+    end
+    if count == 0 then return end
     if teaches < 100 then
-        if teaches ~= select(3, UnitClass("player")) then return end
-        for _, spell in ipairs(D.Entries("spells")) do
-            if D.SpellLearnableNow(spell) then count = count + 1 end
-        end
-        if count > 0 then add(L["Can teach you %d spells now"]:format(count), "good") end
-    elseif D.ProfessionRanks()[teaches] then
-        for _, recipe in ipairs(D.Entries("professions")) do
-            if recipe.skillLine == teaches and (recipe.recipeItem or 0) == 0 and D.RecipeLearnable(recipe) == "now" then
-                count = count + 1
-            end
-        end
-        if count > 0 then add(L["Can teach you %d recipes now"]:format(count), "good") end
+        add(L["Can teach you %d spells now"]:format(count), "good")
+    else
+        add(L["Can teach you %d recipes now"]:format(count), "good")
     end
 end
 
--- the zone you are in (a city district or cave resolves to its zone, see Data's You\Zone.lua); nil if the
+-- the zone you are in (a city district or cave resolves to its zone, see You\Zone.lua); nil if the
 -- client does not know
 local function CurrentZone() return D.PlayerZone(true) end
 
@@ -137,7 +137,7 @@ ns.RegisterFilter({
         local reaction = entry.reaction
         local hostile = reaction == 1 or (reaction == 0 and entry.roles == 0)
         return hostile and entry.levelMax > 0
-            and entry.levelMin <= playerLevel + 3 and entry.levelMax >= playerLevel - 5
+            and entry.levelMin <= playerLevel + ns.LEVEL_ABOVE and entry.levelMax >= playerLevel - ns.LEVEL_BELOW
     end,
 })
 
@@ -171,8 +171,8 @@ ns.RegisterFilter({
     test = function(entry) return entry.reaction == 1 end,
 })
 
--- the pool: rebuilt when Data rebuilt its NPCs or professions (a recipe learned), drops were learned, or
--- your professions changed (not on every skill point)
+-- the pool: rebuilt when the data layer rebuilt its NPCs or professions (a recipe learned), drops were
+-- learned, or your professions changed (not on every skill point)
 local recipeCache, recipeProfessions = D.Cache({ "data:npcs", "data:professions", "drops" }), nil
 -- a recipe item whose recipe you could learn, now or later (D.RecipeLearnable decides)
 local function UnknownRecipeItem(itemID, ranks)
@@ -234,7 +234,7 @@ local function Nearer(a, b)
 end
 local LOOKUPS = 30
 local NPCS = { npcs = true }
--- Not a pass over all NPCs (14,000: the tab lagged): the zone's NPCs (D.NPCsInZone, kept per zone), the
+-- Not a pass over all NPCs (14,000, too slow): the zone's NPCs (D.NPCsInZone, kept per zone), the
 -- ones to look up (the reasons' own candidates) and the ones you used (the memories' lists).
 local taken = {}
 local function Browse(take)
@@ -278,14 +278,15 @@ ns.RegisterSource({
     emptyHint = L["Nobody useful near you. Type a name."],
     icon = (function()
         -- a portrait of your own race (Achievement_Character_<race>_<sex>, the
-        -- client has them for the ten classic races), else the group icon
+        -- client has them for these ten races), else the group icon
         local _, race = UnitRace("player")
         local RACES = { Scourge = "Undead", NightElf = "Nightelf", BloodElf = "Bloodelf" }
         race = RACES[race] or race
         local known = { Human = 1, Dwarf = 1, Gnome = 1, Nightelf = 1, Orc = 1, Troll = 1, Tauren = 1, Undead = 1,
             Bloodelf = 1, Draenei = 1 }
         if not race or not known[race] then return "Interface\\Icons\\INV_Misc_GroupNeedMore" end
-        return ("Interface\\Icons\\Achievement_Character_%s_%s"):format(race, UnitSex("player") == 3 and "Female" or "Male")
+        return ("Interface\\Icons\\Achievement_Character_%s_%s"):format(race,
+            UnitSex("player") == 3 and "Female" or "Male")
     end)(),
     browse = Browse,
     describe = Describe,

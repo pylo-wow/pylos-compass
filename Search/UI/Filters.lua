@@ -17,14 +17,14 @@ local TextWidth = W.TextWidth
 local FILTER_WIDTH, FILTER_ROW = 150, 24
 local CATEGORY_ROW = FILTER_ROW + 2
 local CHECK = 20
--- gap to the list as between the bar and the list; it slides out this far, in this time
-local FILTER_GAP, FILTER_SLIDE, FILTER_TIME = 6, 14, 0.18
-local FILTER_TOP = 6 -- below the bar, as the list
+-- gap to the list as between the bar and the list; it slides out this far, in W.FADE_TIME
+local FILTER_GAP, FILTER_SLIDE = 6, 14
+local WINDOW_GAP = ui.WINDOW_GAP
 ui.FILTER_GAP = FILTER_GAP
 ui.filterHeight = 0
 
 local filterPanel = CreateFrame("Frame", nil, bar)
-filterPanel:SetPoint("TOPLEFT", bar, "BOTTOMRIGHT", FILTER_GAP, -FILTER_TOP)
+filterPanel:SetPoint("TOPLEFT", bar, "BOTTOMRIGHT", FILTER_GAP, -WINDOW_GAP)
 filterPanel:SetWidth(FILTER_WIDTH)
 filterPanel:Hide()
 W.Panel(filterPanel)
@@ -35,6 +35,24 @@ filterPanel.title:SetPoint("TOPLEFT", 14, -12)
 filterPanel.title:SetText(L["Filter"])
 
 local BESIDE = { "TOPLEFT", filterPanel, "TOPRIGHT", W.TIP_GAP, 0 }
+
+function ui.ColoredName(f)
+    return f.color and ("|c" .. f.color .. f.name .. "|r") or f.name
+end
+local ColoredName = ui.ColoredName
+
+-- the filter's tooltip (a feature's): name in gold (a quality in its color), what it does in white
+local function FilterTip(f)
+    if not f.description then return end
+    W.FeatureTip(tip, filterPanel, BESIDE, ColoredName(f), f.description)
+end
+local function FilterTipGone()
+    if tip:GetOwner() == filterPanel then
+        tip:Hide()
+        ui.list.tooltipEntry = nil
+        ui.ShowTooltip(S.results[S.marked])
+    end
+end
 
 -- The pin (top right): pinned, the window opens with the search every time (PylosCompassDB.filtersOpen)
 local PIN = 14
@@ -103,7 +121,7 @@ end)
 pin:SetScript("OnEnter", PinTip)
 pin:SetScript("OnLeave", function()
     ShowPin()
-    ui.FilterTipGone()
+    FilterTipGone()
 end)
 
 local filterRows, filterHeaders = {}, {}
@@ -135,11 +153,11 @@ local function FilterRow(i)
     -- hovering: what the filter does, where the result's tooltip stands; that tooltip returns when the mouse leaves
     row:SetScript("OnEnter", function(self)
         self.highlight:Show()
-        ui.FilterTip(self.filter)
+        FilterTip(self.filter)
     end)
     row:SetScript("OnLeave", function(self)
         self.highlight:Hide()
-        ui.FilterTipGone()
+        FilterTipGone()
     end)
     filterRows[i] = row
     return row
@@ -152,24 +170,6 @@ local function FilterHeader(i)
     header:SetJustifyH("LEFT")
     filterHeaders[i] = header
     return header
-end
-
-function ui.ColoredName(f)
-    return f.color and ("|c" .. f.color .. f.name .. "|r") or f.name
-end
-local ColoredName = ui.ColoredName
-
--- the filter's tooltip (a feature's): name in gold (a quality in its colour), what it does in white
-function ui.FilterTip(f)
-    if not f.description then return end
-    W.FeatureTip(tip, filterPanel, BESIDE, ColoredName(f), f.description)
-end
-function ui.FilterTipGone()
-    if tip:GetOwner() == filterPanel then
-        tip:Hide()
-        ui.list.tooltipEntry = nil
-        ui.ShowTooltip(S.results[S.marked])
-    end
 end
 
 -- In the search over everything the filters stand under their categories, folded: a line per category with its
@@ -263,7 +263,7 @@ local function PlaceAt(frame, left, right, y)
         frame.curY, frame.coming = y, nil
         frame:SetAlpha(1)
     elseif coming then
--- comes from above (or its category's line), see-through; fades in when the going lines are gone (Glide)
+        -- comes from above (or its category's line), see-through; fades in when the going lines are gone (Glide)
         W.Follow(frame, "curY", nil)
         W.Tween(frame, "line", nil)
         frame.curY, frame.coming = unfoldFrom or (y + LINE_DROP), true
@@ -304,24 +304,66 @@ local holding = { ease = false, apply = function() end, done = Glide }
 local function Turn(row, angle) row.arrow:SetRotation(angle) end
 local TURN_NEAR = 0.01
 
+-- It slides out from the list's edge and fades in when it opens, back and out when it closes (leaving faster)
+local function Slide(self, value)
+    self:SetAlpha(value)
+    self:ClearAllPoints()
+    self:SetPoint("TOPLEFT", bar, "BOTTOMRIGHT", FILTER_GAP - FILTER_SLIDE * (1 - value), -WINDOW_GAP)
+end
+local opening = { duration = W.FADE_TIME, apply = Slide, done = function() ui.Finished("filters") end }
+local closingPanel = { duration = W.CLOSE_TIME,
+    apply = function(self, value) Slide(self, 1 - value) end,
+    done = function(self)
+        self.closingAt = nil
+        self:Hide()
+        ui.Finished("filters") -- closed while opening: the close tab still comes
+    end,
+}
+
+-- shows the window where its animation starts: see-through, at the list's edge (shown as it was left, it
+-- would stand there whole for one frame before the animation took it back to its start)
+local function OpenFilterPanel()
+    filterPanel.shownAt, filterPanel.closingAt = GetTime(), nil
+    W.Tween(filterPanel, "slide", opening)
+    filterPanel:Show()
+end
+
+local layoutKey, layoutHeight -- what the lines were laid out from, and the height that gave
+
 -- draws the filter window (shown: open, filters fit, a list below the bar); sets ui.filterHeight for the list beside it
 function ui.RenderFilterPanel(show)
     ui.filterHeight = 0
     ui.filterWanted = show and true or false
     if not show then
+        layoutKey = nil
         -- slides back and fades out (hides at the end); the list may shrink again
         if filterPanel:IsShown() and not filterPanel.closingAt then
             filterPanel.closingAt = GetTime()
-            W.Tween(filterPanel, "slide", ui.closingPanel)
+            W.Tween(filterPanel, "slide", closingPanel)
             ui.FitList()
         end
         ui.MoveTip()
         return
     end
+    -- the layout depends on the category, the filters set, the folded-out category and the categories on:
+    -- not on each keystroke
+    local parts = { S.scope and S.scope.key or "", ui.filterCategory or "" }
+    for _, f in ipairs(S.filters) do parts[#parts + 1] = f.key end
+    for _, source in ipairs(ns.ActiveSources()) do parts[#parts + 1] = source.key end
+    local key = table.concat(parts, "\1")
+    if key == layoutKey and filterPanel:IsShown() and not filterPanel.closingAt then
+        ui.filterHeight = layoutHeight
+        ui.FitList()
+        ui.FitFilterHeight()
+        ui.MoveTip()
+        return
+    end
+    layoutKey = key
     local set = {}
     for _, f in ipairs(S.filters) do set[f] = true end
 
-    -- the sections: one without a heading in a category; over everything one per category (each filter under the first it belongs to)
+    -- the sections: one without a heading in a category; over everything one per category (each filter under
+    -- the first it belongs to)
     local sections = {}
     if S.scope then
         sections[1] = { filters = {} }
@@ -344,7 +386,7 @@ function ui.RenderFilterPanel(show)
     end
 
     animateLayout = filterPanel:IsShown() and not filterPanel.closingAt
-        and GetTime() - (filterPanel.shownAt or 0) > FILTER_TIME
+        and GetTime() - (filterPanel.shownAt or 0) > W.FADE_TIME
     for _, frame in ipairs(layoutFrames) do frame.placed = false end
     local y, rowCount, headerCount, categoryCount = -34, 0, 0, 0
     local needed = math.max(FILTER_WIDTH, 14 + TextWidth(filterPanel.title) + 40)
@@ -359,7 +401,7 @@ function ui.RenderFilterPanel(show)
         needed = math.max(needed, ROW_EXTRA + TextWidth(row.text))
         y = y - FILTER_ROW
     end
-    -- a group (the qualities): its name, then its filters as the other rows (box and coloured name) in two
+    -- a group (the qualities): its name, then its filters as the other rows (box and colored name) in two
     -- columns as wide as their longest name, three lines instead of six
     local function PlaceGroup(list)
         headerCount = headerCount + 1
@@ -475,44 +517,22 @@ function ui.RenderFilterPanel(show)
         filterPanel.width, filterPanel.height = filterPanel.targetWidth, filterPanel.targetHeight
         filterPanel:SetWidth(filterPanel.width)
     end
-    -- every line where it stands now (new in its place, coming at its start, two-column at its width); gliding moves them on
+    -- every line where it stands now (new in its place, coming at its start, two-column at its width);
+    -- gliding moves them on
     for _, frame in ipairs(layoutFrames) do
         if frame:IsShown() then ApplyPlace(frame) end
     end
     ui.filterHeight = -y + 10
-    -- the list beside it as tall (the window came after the list's height was set when the search opened
+    layoutHeight = ui.filterHeight
+    -- the list beside it as tall (the window is drawn after the list's height was set when the search opens
     -- with the window open); the window at least as tall as the list
     ui.FitList()
     if not animateLayout then ApplyHeight(filterPanel, filterPanel.height) end
     ui.MoveTip()
-    -- while the search opens it waits for the list (opening order: step "list"); coming out together with
-    -- the growing list looked restless
+    -- while the search opens it waits for the list (opening order: step "list") instead of coming out
+    -- together with the growing list
     if not ui.Since("list") then return end
-    if not filterPanel:IsShown() or filterPanel.closingAt then ui.OpenFilterPanel() end
-end
-
--- It slides out from the list's edge and fades in when it opens, back and out when it closes (leaving faster)
-local function Slide(self, value)
-    self:SetAlpha(value)
-    self:ClearAllPoints()
-    self:SetPoint("TOPLEFT", bar, "BOTTOMRIGHT", FILTER_GAP - FILTER_SLIDE * (1 - value), -FILTER_TOP)
-end
-local opening = { duration = FILTER_TIME, apply = Slide, done = function() ui.Finished("filters") end }
-ui.closingPanel = { duration = W.CLOSE_TIME,
-    apply = function(self, value) Slide(self, 1 - value) end,
-    done = function(self)
-        self.closingAt = nil
-        self:Hide()
-        ui.Finished("filters") -- closed while opening: the close tab still comes
-    end,
-}
-
--- shows the window where its animation starts: see-through, at the list's edge (shown as it was left, it stood
--- there whole for one frame before the animation took it back to its start)
-function ui.OpenFilterPanel()
-    filterPanel.shownAt, filterPanel.closingAt = GetTime(), nil
-    W.Tween(filterPanel, "slide", opening)
-    filterPanel:Show()
+    if not filterPanel:IsShown() or filterPanel.closingAt then OpenFilterPanel() end
 end
 
 -- the search opens: the window starts closed, nothing of it moving
@@ -526,6 +546,6 @@ end
 -- opening order: once the list stands (or the detail view shows), the pinned window comes out (the tooltip
 -- slides aside with it); with none pinned that step is done as well
 ui.After("list", function()
-    if ui.filterWanted then ui.OpenFilterPanel() else ui.Finished("filters") end
+    if ui.filterWanted then OpenFilterPanel() else ui.Finished("filters") end
     ui.MoveTip()
 end)

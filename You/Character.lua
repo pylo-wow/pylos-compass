@@ -1,7 +1,7 @@
 local _, D = ...
 if D.off then return end
 
--- Character facts for valuing items: specialisation (tree with the most points), hit and defense.
+-- Character facts for valuing items: specialization (tree with the most points), hit and defense.
 
 -- Tree of a talent node by posX (Forever has one TraitTree per class; the three
 -- trees are column groups at posX 1020-2820, 5020-6820, 9080-10880)
@@ -13,9 +13,6 @@ end
 
 -- Points spent per tree: { a, b, c }, nil if the client gives none
 local function Points()
-    if not (C_ClassTalents and C_ClassTalents.GetActiveConfigID and C_Traits and C_Traits.GetConfigInfo) then
-        return nil
-    end
     local configID = C_ClassTalents.GetActiveConfigID()
     local config = configID and C_Traits.GetConfigInfo(configID)
     local treeID = config and config.treeIDs and config.treeIDs[1]
@@ -56,13 +53,7 @@ local function Number(value)
     return value
 end
 function D.PlayerRatings()
-    local hit = Number(GetHitModifier and GetHitModifier())
-    local spellHit = Number(GetSpellHitModifier and GetSpellHitModifier())
-    local defense = 0
-    local defenseSkill = UnitDefenseSkill or UnitDefense -- UnitDefenseSkill is the client's name (UnitDocumentation.lua)
-    if defenseSkill then
-        local base, bonus = defenseSkill("player")
-        defense = Number(base) + Number(bonus)
-    end
-    return { hit = hit, spellHit = spellHit, defense = defense }
+    local base, bonus = UnitDefenseSkill("player")
+    return { hit = Number(GetHitModifier()), spellHit = Number(GetSpellHitModifier()),
+        defense = Number(base) + Number(bonus) }
 end

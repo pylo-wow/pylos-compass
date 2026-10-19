@@ -8,23 +8,23 @@ local L = ns.L
 
 local FRESH = 5 * 60 -- seconds a link counts
 local linked = {}    -- entry ID -> { time(), who }
-local MAX = 200  -- more than this many: the faded ones go (on write, so a busy channel cannot grow it for hours)
+local MAX = 200      -- more than this many: the faded ones go (on write, so a busy channel cannot grow it for hours)
 
 local EVENTS = { "CHAT_MSG_SAY", "CHAT_MSG_YELL", "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER", "CHAT_MSG_RAID",
     "CHAT_MSG_RAID_LEADER", "CHAT_MSG_GUILD", "CHAT_MSG_OFFICER", "CHAT_MSG_WHISPER", "CHAT_MSG_CHANNEL",
     "CHAT_MSG_INSTANCE_CHAT", "CHAT_MSG_INSTANCE_CHAT_LEADER" }
--- the link kinds and the entry IDs they stand for (Data: i:, q:, s:)
+-- the link kinds and the entry IDs they stand for (i:, q:, s:)
 local KINDS = { item = "i:", quest = "q:", spell = "s:", enchant = "s:" }
 
 local function Heard(_, text, sender, _, _, _, _, _, _, _, _, _, guid)
-    if issecretvalue and (issecretvalue(text) or issecretvalue(sender) or issecretvalue(guid)) then return end
+    if D.Secret(text) or D.Secret(sender) or D.Secret(guid) then return end
     if type(text) ~= "string" or not text:find("|H", 1, true) then return end
     if guid and guid == UnitGUID("player") then return end
     local now, any = time(), false
     for kind, id in text:gmatch("|H(%a+):(%d+)") do
         local prefix = KINDS[kind]
         if prefix then
-            -- (who linked it, without the realm)
+            -- who linked it, without the realm
             linked[prefix .. id] = { now, type(sender) == "string" and sender:match("^[^-]+") or nil }
             any = true
         end
@@ -45,13 +45,7 @@ for _, event in ipairs(EVENTS) do ns.On(event, Heard) end
 -- how fresh: 1 right after the link, 0 after FRESH; nil if not linked
 local function Freshness(id)
     local link = id and linked[id]
-    if not link then return nil end
-    local share = 1 - (time() - link[1]) / FRESH
-    if share <= 0 then
-        linked[id] = nil
-        return nil
-    end
-    return share
+    return link and ns.Fade(linked, id, link[1], FRESH)
 end
 
 ns.RegisterReason({
@@ -60,7 +54,7 @@ ns.RegisterReason({
     stage = "know", label = "Linked in chat",
     kind = "know",
     sources = { "items", "quests", "spells", "professions" },
-    depends = { "rec:linked" }, -- (fading with time: kept at most STALE seconds, Reasons.lua)
+    depends = { "rec:linked" }, -- fades with time: kept at most STALE seconds (Reasons.lua)
     candidates = function(add)
         for id in pairs(linked) do add(D.EntryByID(id)) end
     end,

@@ -4,9 +4,9 @@ local D = ns.data
 -- Rows of a link's list (Links\*.lua): an item or NPC with the entry behind it (target: a click opens
 -- it, the tooltip is its own) and the link's info on the right (category).
 
--- A linked row's tooltip lines (and reaction: the name colour, UI\Kit\Widgets.lua EntryText) are its
--- target's, worked out lazily: building them for every row made a menu that only counts rows (an item
--- dropped by 40 NPCs) build 40 tooltips, 3.4 ms and 760 KB of garbage per right click.
+-- A linked row's tooltip lines (and reaction: the name color, UI\Kit\Widgets.lua EntryText) are its
+-- target's, worked out when first read: building them for every row would make a menu that only counts
+-- rows (an item dropped by 40 NPCs) build 40 tooltips.
 ns.LINKED_ROW = { __index = function(row, field)
     if field == "lines" or field == "reaction" then return row.target[field] end
 end }

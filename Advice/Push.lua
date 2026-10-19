@@ -1,17 +1,22 @@
 local ns = select(2, ...).advice
 local D = ns.data
 
--- Nudges: unprompted alerts with a rule set of their own (Pushes.lua), on the same facts as the window (reasons, reach, memory).
--- A wrong nudge costs more trust than a right one earns. Every candidate passes a chain of gates:
+-- Nudges: unprompted alerts with a rule set of their own (Pushes.lua), on the same facts as the window (reasons,
+-- reach, memory). A wrong nudge costs more trust than a right one earns. Every candidate passes a chain of gates:
 --   big (large gain), missable (now much cheaper than later), sure (hard facts only, no unchecked 1.12 data),
 --   new (not nudged for this situation, not just done, not "Don't suggest"),
---   moment (a pause: after combat/loot/landing, new zone, resting, loading screen; never in combat, on a flight, in an instance group),
+--   moment (a pause: after combat/loot/landing, new zone, resting, loading screen; never in combat, on a flight,
+--   in an instance group),
 --   budget (medium at most every MEDIUM_EVERY, loud every LOUD_EVERY; a rule may own its budget)
--- Levels (Toast.lua): 1 quiet (button glow, tab dot), 2 medium (short note, at a moment), 3 loud (note and sound until answered, out of combat).
--- A rule gives its highest level; one lower when 2 of the last 3 were ignored/"Later", by options (a level switched off gives the one below), quiet over budget.
--- "Never for this" switches the rule off. Every decision, near miss (one gate failed) and outcome goes to ns.Log (a no-op unless the dev tools replace it).
---   ns.RegisterPush(rule): rule = { key, label, level, topic (tab for the dot, or nil), states (Data states to re-evaluate on), ownBudget, candidates(add) }
---   add(c): c = { situation (identity: nudges once per AGAIN seconds), entry, title, text, icon, level,
+-- Levels (Toast.lua): 1 quiet (button glow, tab dot), 2 medium (short note, at a moment), 3 loud (note and sound
+-- until answered, out of combat).
+-- A rule gives its highest level; one lower when 2 of the last 3 were ignored/"Later", by options (a level switched
+-- off gives the one below), quiet over budget. "Never for this" switches the rule off.
+-- While push.trace is set (developer tools, tests), every decision, near miss (one gate failed) and outcome goes to
+-- ns.Log (a no-op unless something replaces it) and to push.history.
+--   ns.RegisterPush(rule): rule = { key, label, level, topic (tab for the dot, or nil), states (State names to
+--   re-evaluate on), ownBudget, candidates(add) }
+--   add(c): c = { situation (identity: nudges once per AGAIN seconds), entry, title, text, icon, level, again, anyway,
 --   action = { kind = "item" | "macro" | "waypoint", value, name }, big/missable/sure = { ok, words } }
 
 local push = {}
@@ -27,7 +32,7 @@ local LATER = 10 * 60       -- seconds "Later" holds
 local FOLLOW = 30 * 60      -- seconds a shown nudge waits to be followed
 local MOMENT = 30           -- seconds a pause lasts after its event
 local JUST_DONE = 30 * 60   -- an entry acted on within this is not new
-local HISTORY = 80          -- decisions kept for the debug window
+local HISTORY = 80          -- decisions kept in push.history
 local MAX_SESSION = 500     -- entries in pushedAt / nearLogged before they restart
 
 local rules, byKey = {}, {}
@@ -49,7 +54,7 @@ local quiet = {}      -- situation -> { topic, rule key, at }
 push.quiet = quiet    -- shared with Toast.lua; do not replace
 local shown = {}      -- nudges shown, watched for being followed
 local lastAt = { [MEDIUM] = 0, [LOUD] = 0 }
-push.history = {}     -- the latest decisions, newest first; only filled while push.trace is set (dev window, tests)
+push.history = {}     -- the latest decisions, newest first; filled only while push.trace is set (dev tools, tests)
 
 function ns.RegisterPush(rule)
     rules[#rules + 1] = rule
@@ -60,7 +65,7 @@ local function Enabled(rule)
     return ns.db and ns.db.push ~= false and ns.db["push_" .. rule.key] ~= false
 end
 
--- Log and history
+-- Log and history (only while push.trace is set)
 
 local function Gates(c, moment)
     local parts = {}
@@ -79,11 +84,10 @@ local function Note(outcome, rule, c, level, moment, extra)
     local gates = c and Gates(c, moment) or ""
     ns.Log("push", outcome, rule.key, id, level and LEVEL_NAMES[level] or "-", gates,
         c and c.situation or "-", extra or "")
-    table.insert(push.history, 1, { at = time(), outcome = outcome, rule = rule.key, name = c and (c.entry and c.entry.name or c.title) or "",
-        level = level, gates = gates, extra = extra })
+    table.insert(push.history, 1, { at = time(), outcome = outcome, rule = rule.key,
+        name = c and (c.entry and c.entry.name or c.title) or "", level = level, gates = gates, extra = extra })
     push.history[HISTORY + 1] = nil
 end
-push.Note = Note
 
 -- Saved per character: situations nudged (time) and the last outcomes per rule
 local function Saved()
@@ -156,7 +160,7 @@ ns.On("PLAYER_ENTERING_WORLD", function() Pause(3) end)
 -- combat: hide the note (its secure button cannot stay)
 ns.On("PLAYER_REGEN_DISABLED", function()
     momentUntil = 0
-    if push.Interrupt then push.Interrupt() end
+    push.Interrupt()
 end)
 
 -- Quiet
@@ -168,7 +172,8 @@ function push.QuietTopic(topic)
     end
     return false
 end
--- Window opened or tab looked at: clears the dots. Returns the entries of the quiet nudges seen (entry -> true); the window shows them first, with the dot (Window.lua).
+-- Window opened or tab looked at: clears the dots. Returns the entries of the quiet nudges seen (entry -> true);
+-- the window shows them first, with the dot (Window.lua).
 function push.SeenTopic(topic)
     local entries = {}
     for situation, q in pairs(quiet) do
@@ -217,7 +222,8 @@ local function Level(rule, c)
     local db = ns.db
     if level == LOUD and db.pushLoud == false then level = MEDIUM end
     if level == MEDIUM and db.pushMedium == false then level = QUIET end
-    if level == QUIET and db.pushQuiet == false then level = 0 end
+    -- no topic: a quiet nudge would only glow the button, no tab lists it
+    if level == QUIET and (db.pushQuiet == false or not rule.topic) then level = 0 end
     return level
 end
 
@@ -261,7 +267,8 @@ local function Decide(rule, c, present)
     local level = Level(rule, c)
     if level <= 0 then return end
     -- over the budget: quiet instead
-    if level > QUIET and not rule.ownBudget and time() - lastAt[level] < (level == LOUD and LOUD_EVERY or MEDIUM_EVERY) then
+    if level > QUIET and not rule.ownBudget
+            and time() - lastAt[level] < (level == LOUD and LOUD_EVERY or MEDIUM_EVERY) then
         Note("budget", rule, c, level)
         level = QUIET
     end
@@ -310,9 +317,11 @@ local function Watch(present)
 end
 
 local running = false
+local ranAt = -math.huge -- GetTime() of the last start
 function Evaluate(why)
     if running or not ns.db or ns.db.push == false or ns.db.adviceOn == false or InCombatLockdown() then return end
     running = true
+    ranAt = GetTime()
     local present = {}
     local ok, problem = pcall(function()
         D.RefreshOwned()
@@ -348,10 +357,11 @@ local function Soon()
     due = true
     C_Timer.After(1, function()
         due = false
-        Evaluate("state")
+        -- a loot also pauses (0.5 s) and changes the bags: one full evaluation is enough
+        if GetTime() - ranAt > 0.6 then Evaluate("state") end
     end)
 end
--- Call after the rules are registered (end of Pushes.lua); Data has loaded, so its D.OnLoaded is past.
+-- Call after the rules are registered (end of Pushes.lua).
 function push.Start()
     local states, seen = {}, {}
     for _, rule in ipairs(rules) do
@@ -368,6 +378,10 @@ end
 -- Answers from the note (Toast.lua)
 
 function push.Answer(rule, c, level, answer)
+    -- shown but not taken in: the budget slot is free again
+    if (answer == "later" or answer == "interrupted" or answer == "replaced") and not rule.ownBudget then
+        lastAt[level] = 0
+    end
     if answer == "later" then
         laterUntil[c.situation] = time() + LATER
         pushedAt[c.situation] = nil
@@ -385,9 +399,12 @@ function push.Answer(rule, c, level, answer)
     if not rule.sample and (answer == "ignored" or answer == "later" or answer == "clicked" or answer == "never") then
         Remember(rule.key, answer)
     end
-    -- answered: no longer watched (no second log line for clicked)
-    for i = #shown, 1, -1 do
-        if shown[i].c == c then table.remove(shown, i) end
+    -- answered: no longer watched (no second log line for clicked); a faded note stays, following it later still
+    -- counts (Watch drops it after FOLLOW)
+    if answer ~= "ignored" then
+        for i = #shown, 1, -1 do
+            if shown[i].c == c then table.remove(shown, i) end
+        end
     end
     Note(answer, rule, c, level)
 end

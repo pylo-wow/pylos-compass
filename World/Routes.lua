@@ -96,11 +96,11 @@ end
 -- Your speed in yards/second: your mount's now if mounted, else your riding skill's (you
 -- would mount for a long way)
 local function Speed()
-    if IsMounted and IsMounted() and GetUnitSpeed then
+    if IsMounted() then
         local _, run = GetUnitSpeed("player")
         if not D.Secret(run) and run and run > RUN then return run end
     end
-    local riding = IsPlayerSpell and (IsPlayerSpell(33391) and 2 or IsPlayerSpell(33388) and 1.6)
+    local riding = D.SpellKnown(33391) and 2 or D.SpellKnown(33388) and 1.6
     if not riding then return RUN end
     -- mount speed as seen (You\Hearth.lua), else the riding skill's
     return D.MountSpeed and D.MountSpeed() or RUN * riding
@@ -137,7 +137,7 @@ end
 -- Yards saved by flying on over a hub (from, over, to: taxi node IDs): the D.taxiTransitions
 -- row, else the hub's median, else 0. Rows are keyed by one number (node IDs are below 8192), built once.
 local transitions
-local function Saved(from, over, to)
+local function YardsSaved(from, over, to)
     if not transitions then
         transitions = {}
         local rows = D.taxiTransitions or {}
@@ -191,7 +191,8 @@ local function Build()
             for _ = 1, #list - 1 do
                 ride = ride + Leg(j)
                 j = j % #list + 1
-                table.insert(from.edges, { to = list[j], minutes = (wait + ride) / 60, label = transport.name, side = side })
+                table.insert(from.edges,
+                    { to = list[j], minutes = (wait + ride) / 60, label = transport.name, side = side })
                 ride = ride + Dock(j)
             end
         end
@@ -216,7 +217,7 @@ local function Build()
         Edge(a, b)
         if bit.band(flags, 1) == 1 then Edge(b, a) end
     end
-    -- precompute the points each one may walk to (asking Walkable of every pair each round was costly)
+    -- the points each one may walk to, computed once (Walkable per pair in every round is costly)
     for _, point in ipairs(points) do
         local near = {}
         for _, other in ipairs(points) do
@@ -240,9 +241,8 @@ end
 
 -- The search from you: minutes to each point and the rides on the way. answers: place ->
 -- { minutes, overseas, words } or false, until the next search (rough is enough: the same
--- answer while you stay within MOVED yards; recomputing per NPC took half a refresh). Per point
--- only the previous point and edge are kept (via, viaEdge) and the rides are assembled for a
--- place answered (copying the ride list per better way produced most of the garbage).
+-- answer while you stay within MOVED yards). Per point only the previous point and edge are
+-- kept (via, viaEdge); the rides are assembled for a place answered.
 local reached, via, viaEdge, searchedAt, from, answers
 local hearthPoint -- your hearthstone's inn in this search, if ready (not one of the net's points)
 
@@ -331,7 +331,8 @@ local function Search(continent, x, y, zone)
                 -- (one ride over several hops) and joins the next path early
                 if edge.flight then
                     if viaEdge[best] and viaEdge[best].flight then
-                        minutes = math.max(0, minutes - Saved(via[best].node, best.node, edge.to.node) / FLIGHT_SPEED / 60)
+                        minutes = math.max(0,
+                            minutes - YardsSaved(via[best].node, best.node, edge.to.node) / FLIGHT_SPEED / 60)
                     else
                         minutes = minutes + FLIGHT_START
                     end

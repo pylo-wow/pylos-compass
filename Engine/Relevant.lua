@@ -1,20 +1,17 @@
 local _, D = ...
 local ns = D.engine
 
--- What is most relevant now across Data's domains (the search's start page shows it; Learning.lua watches whether
--- you follow it).
+-- What is most relevant now across the data layer's domains (the search's start page and the recommendations' window
+-- show it; Learning.lua watches whether you follow it).
 --   candidates  what each domain puts forward (CANDIDATES: what you have, what has a reason, what you use) and what you
 --               chose lately
 --   score       the weighed fit (Reasons.lua); only with a reason. How much you use it only breaks a tie.
---   mix         at most perDomain per domain, best first; one NPC per errand (reasons.Errand); in the list of all, one row
---               per errand also where an item and the row it is got at both stand (Merge: an upgrade and the quest of
---               your log rewarding it, something to restock and its vendor)
+--   mix         at most perDomain per domain, best first; one NPC per errand (reasons.Errand); in the list of all,
+--               one row per errand also where an item and the row it is got at both stand (Merge: an upgrade and the
+--               quest of your log rewarding it, something to restock and its vendor)
 -- Hidden ones ("Don't suggest") and ones another row stands for (a spell: its trainer) stay out.
 
 local reasons, memory = ns.reasons, ns.memory
-
--- Use is only a tie breaker (habit is no recommendation; counted as a reason it filled the start page).
-local RECENT = 40 -- recent choices looked at
 
 -- Candidates per domain: add(entry) for each. Fit is reasons.Fit.
 local CANDIDATES = {
@@ -64,8 +61,8 @@ local CANDIDATES = {
     end,
 }
 
--- every candidate worth something now: list of { entry, score, fit, used }, best first; domains: set of domain keys,
--- nil: all; kind "do" (default) or "know". Knowing takes the candidates its reasons bring and has no use filler:
+-- every candidate worth something now: list of { entry, id, score, fit, used }, best first; domains: set of domain
+-- keys, nil: all; kind "do" (default) or "know". Knowing takes the candidates its reasons bring and has no use filler:
 -- lookups are a reason of their own there.
 local function Scored(domains, kind)
     kind = kind or "do"
@@ -80,7 +77,7 @@ local function Scored(domains, kind)
     end
     if kind == "do" then
         for i, id in ipairs(memory.Recent()) do
-            if i > RECENT then break end
+            if i > ns.RECENT then break end
             Add(D.EntryByID(id))
         end
         for _, key in ipairs(D.DomainKeys()) do
@@ -96,9 +93,11 @@ local function Scored(domains, kind)
         if id and not reasons.Hidden(entry, id) then
             local fit = reasons.Weighed(entry, id, kind)
             -- a hidden entry (not learned yet) only with a reason (a spell to learn); none another row stands for
-            if (not entry.hidden or fit > 0) and not reasons.Covered(entry, kind) then
+            if not reasons.Covered(entry, kind) then
                 -- only with a reason; use only breaks a tie
-                if fit > 0 then scored[#scored + 1] = { entry = entry, id = id, score = fit, fit = fit, used = Used(id) } end
+                if fit > 0 then
+                    scored[#scored + 1] = { entry = entry, id = id, score = fit, fit = fit, used = Used(id) }
+                end
             end
         end
     end
@@ -126,19 +125,19 @@ local function Scored(domains, kind)
 end
 
 -- One row per errand where an entry and the row it is got at both stand in a scored list (doing): the entry goes, the
--- other row carries it (its carries) and takes the better score. Returns a new list of new items; the scored list stays
--- as it is (the topics' lists are mixed from it).
+-- other row carries it (its carries) and takes the better score. Returns a new list of new items; the scored list
+-- stays as it is (the topics' lists are mixed from it).
 local function Merge(scored)
-    local byID, hosts = {}, nil
+    local byID, carriers = {}, nil
     for _, item in ipairs(scored) do byID[item.id] = item end
     for _, item in ipairs(scored) do
-        local host = byID[reasons.Via(item.entry) or false]
-        if host and host ~= item then
-            hosts = hosts or {}
-            hosts[item] = host
+        local carrier = byID[reasons.Via(item.entry) or false]
+        if carrier and carrier ~= item then
+            carriers = carriers or {}
+            carriers[item] = carrier
         end
     end
-    if not hosts then return scored end
+    if not carriers then return scored end
     local merged, copies = {}, {}
     local function Copy(item)
         local copy = copies[item]
@@ -151,12 +150,12 @@ local function Merge(scored)
         return copy
     end
     for _, item in ipairs(scored) do
-        local host = hosts[item]
-        if host then
-            host = Copy(host)
-            table.insert(host.carries, item.entry)
-            for _, carried in ipairs(item.carries or {}) do table.insert(host.carries, carried) end
-            host.score = math.max(host.score, item.score)
+        local carrier = carriers[item]
+        if carrier then
+            carrier = Copy(carrier)
+            table.insert(carrier.carries, item.entry)
+            for _, carried in ipairs(item.carries or {}) do table.insert(carrier.carries, carried) end
+            carrier.score = math.max(carrier.score, item.score)
         else
             merged[#merged + 1] = item
         end
@@ -189,11 +188,12 @@ local function Mix(scored, limit, perDomain, accept, kind, merged)
     return chosen
 end
 
--- The most relevant entries now: list of { entry, score, fit, used }, best first, at most perDomain per domain; domains:
--- a set of domain keys (a host's switched-on categories), nil: all; kind "do" (default) or "know" (the search's start page).
--- Kept while the reasons' results are (reasons.generation) for the same question, so a host asking with ns.Refresh gets
--- its list again without recomputing. Do not change the list. A few questions are kept side by side (KEEP): the start
--- page and the NPC tab ask with other limits and domains, and one kept answer each threw the other's away.
+-- The most relevant entries now: list of { entry, id, score, fit, used, carries }, best first, at most perDomain per
+-- domain; domains: a set of domain keys (the switched-on categories), nil: all; kind "do" (default) or "know" (the
+-- search's start page). Kept while the reasons' results are (reasons.generation) for the same question, so a caller
+-- asking with ns.Refresh gets its list again without recomputing. Do not change the list. A few questions are kept side
+-- by side (KEEP): the start page and the NPC tab ask with other limits and domains, and a single kept answer would be
+-- thrown away by the other.
 local KEEP = 4
 local last = {} -- kind -> list of { list, generation, limit, perDomain, domains (a copy) }, oldest first
 local function SameDomains(a, b)
@@ -230,10 +230,10 @@ function ns.Relevant(limit, perDomain, domains, kind)
     return list
 end
 
--- The same per topic (a reason's topic; the tabs of Window.lua): { all = list, class = list, gear = list, ... }. "all" is
--- Relevant(limit, perDomain); a topic holds the entries with a reason of it, perDomain not counted. Only "all" merges an
--- entry into the row it is got at (the Gear tab keeps the upgrade a quest rewards). One scoring for all; kept while the
--- reasons' results are (reasons.generation). Do not change the lists.
+-- The same per topic (a reason's topic; the tabs of Window.lua): { all = list, class = list, gear = list, ... }. "all"
+-- is Relevant(limit, perDomain); a topic holds the entries with a reason of it, perDomain not counted. Only "all"
+-- merges an entry into the row it is got at (the Gear tab keeps the upgrade a quest rewards). One scoring for all;
+-- kept while the reasons' results are (reasons.generation). Do not change the lists.
 local byTopic, byTopicFor = nil, nil -- the lists; generation, limit, perDomain they were made for
 function ns.RelevantByTopic(limit, perDomain)
     reasons.Refresh()

@@ -1,13 +1,13 @@
 local _, D = ...
 
--- Current zone (uiMapID): the best map climbed up to its zone. In a cave or at a dungeon entrance
--- the game names only the continent, so match the zone text against the continent's zones.
--- In an instance: the map's zone if any and inInstances is set, else nil.
+-- D.PlayerZone(inInstances): your zone (uiMapID), the best map climbed up to its zone. In a cave or at a dungeon
+-- entrance the game names only the continent, so the zone text is matched against the continent's zones.
+-- In an instance: nil unless inInstances is set.
 -- Cached until the state "zone" changes (called per name plate; the climb allocates tables).
 local function Find()
     local zone, info = D.MapUp(C_Map.GetBestMapForUnit("player"), 3)
     if zone then return zone end
-    if info and info.mapType == 2 and GetRealZoneText and C_Map.GetMapChildrenInfo and Enum and Enum.UIMapType then
+    if info and info.mapType == 2 then
         local name = GetRealZoneText()
         for _, child in ipairs(C_Map.GetMapChildrenInfo(info.mapID, Enum.UIMapType.Zone) or {}) do
             if child.name == name then return child.mapID end

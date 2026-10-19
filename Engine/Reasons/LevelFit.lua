@@ -4,8 +4,8 @@ local L = ns.L
 
 -- Level fit: meant for your level.
 --   items     consumables of the kinds worth suggesting (potions, elixirs, flasks, scrolls, food with a buff, bandages,
---             enhancements; armour and weapons are Upgrade's), not junk, none that begins a quest, one you can use
---             (D.ItemForYou), not yours yet, needing your level or up to five below (at level 3 it fitted 8,265 items)
+--             enhancements; armor and weapons are Upgrade's), not junk, none that begins a quest, one you can use
+--             (D.ItemForYou), not yours yet, needing your level or up to five below
 --   dungeons  your level or your group's (D.DungeonLevelFit; in a group as strong as the share it fits)
 
 local ITEM_WINDOW = 5     -- levels below yours an item still fits
@@ -24,9 +24,9 @@ local TESTS = {
         if not ns.reach.Known(entry) then return nil end
         return true
     end,
-    -- how well your level sits in its range: best a little in (SWEET of the way up: the first levels are hard, the last
-    -- bring little), 1.2 there, 0.6 at the far end; in a group times the share that fits. Your own level may lie outside
-    -- the range when your group's fits: counted as at its edge (else negative)
+    -- how well your level sits in its range: best a little in (SWEET of the way up: the first levels are hard, the
+    -- last bring little), 1.2 there, 0.6 at the far end; in a group times the share that fits. Your own level may lie
+    -- outside the range when your group's fits: counted as at its edge (else negative)
     dungeons = function(entry)
         local fit = D.DungeonLevelFit(entry)
         if not fit then return nil end
@@ -47,13 +47,11 @@ ns.RegisterReason({
     topic = function(entry) return entry.domain == "dungeons" and "dungeons" or "supplies" end,
     prepare = function() level = UnitLevel("player") end,
     test = function(entry) return TESTS[entry.domain](entry) end,
-    -- an item: how easy it is to get; a dungeon: with your group at hand,
-    -- else a group to find and a way to go
+    -- an item: how easy it is to get; a dungeon: with your group at hand, else a group to find and a way to go
     reach = function(entry)
         if entry.domain == "items" then return ns.reach.Item(entry) end
         if #D.GroupLevels() > 1 then return ns.reach.HERE, L["with your group"] end
-        -- a group to find and the way to the entrance (the run itself is the
-        -- suggestion, not its effort)
+        -- a group to find and the way to the entrance (the run itself is the suggestion, not its effort)
         local factor, words = ns.reach.Place(entry.place, ns.reach.GROUP_MINUTES)
         return factor, L["needs a group"] .. (words and (", " .. words) or "")
     end,

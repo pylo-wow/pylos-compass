@@ -2,18 +2,17 @@ local _, D = ...
 if D.off then return end
 local ns = D.engine
 
--- The item valuer: what an item is worth to your character by its stats (D.ItemStats; the facts stay there), weighed for
--- your class, talent tree and level (Weights.lua) with caps for hit and defense. A module apart from the reasons:
--- the host asks it via ns.UpgradeOf (the one check of "an upgrade for you"), other addons via ns.ItemValue.
+-- The item valuer: what an item is worth to your character by its stats (D.ItemStats), weighed for your class, talent
+-- tree and level (Weights.lua) with caps for hit and defense. Its interface is ns.ItemValue (V):
 --   Compare(item)   item: item ID or link -> nil (not wearable, or stats unknown), else { value, worn, gain,
 --                   percent (against what you wear there; nil: free slot), share (gain in percent of all you wear),
 --                   free, slot, replaces (item ID or nil), top = { stat key, ... } (what makes the difference, most
---                   first; empty unless a gain), topAmounts (key -> by how much), drops, dropAmounts (same for a loss
---                   of 3 % or more), procs (true: the new item or one it replaces has an effect the stats do not show) }
+--                   first; empty unless a gain), topAmounts (key -> by how much), drops, dropAmounts (same for a
+--                   loss of 3 % or more), procs (true: the new item or one it replaces has an effect the stats do
+--                   not show) }
 --   Total()         the worth of all you wear
---   Value(item, slot)  its worth in that slot (caps as you are now)
 --   Profile()       class, tree (1-3), "leveling" or "endgame", weights
---   Weights(class, tree, profile)  a table with your changes in it
+--   Weights(class, tree, kind)  kind "leveling" or "endgame": the table with your changes in it
 --   SetWeight(key, value), ResetWeights()  your changes, for the current profile
 --   UseSettings(db)  the table holding the settings (see below)
 -- Items whose stats come by chance ("of the Monkey") are known only from their link: worn ones and links are valued,
@@ -22,10 +21,10 @@ local ns = D.engine
 local V = {}
 ns.ItemValue = V
 
-local W = ns.ITEM_WEIGHTS
+local WEIGHTS = ns.ITEM_WEIGHTS
 local MAX_LEVEL = 60
 -- caps per profile: hit (melee and ranged) and spell hit in percent, defense as skill; above them a point counts OVER
--- of its weight. Levelling: foes of your level (5 % melee, 4 % spells); end game: raid bosses (8 %, 17 %: Forever's own
+-- of its weight. Leveling: foes of your level (5 % melee, 4 % spells); end game: raid bosses (8 %, 17 %: Forever's own
 -- numbers from CR_<CLASS>_HIT_CAP_TOOLTIP in GlobalStrings; Era's were 9 and 16), defense 440 (no more critical hits
 -- from a boss). An off-hand weapon (dual wielding) adds 19 % to the melee cap (24 % and 27 % in the same tooltips;
 -- Forever's DUAL_WIELD_HIT_PENALTY = 19, PaperDollFrame.lua).
@@ -49,11 +48,10 @@ local SLOTS = {
 }
 local MAIN_HAND, OFF_HAND, RANGED = 16, 17, 18
 local DUAL_WIELD = 674 -- the spell
-V.SLOTS = SLOTS
 
--- Kept while what they depend on stays the same (Core\State.lua states): the profile, comparisons, what you wear, your
--- ratings. "rec:weights": your weights and the profile options (SetWeight). A reading the client may not have yet (a
--- worn link's stats, a link not loaded) is kept for its frame only.
+-- Kept while what they depend on stays the same (the states of State.lua): the profile, comparisons, what you wear,
+-- your ratings. "rec:weights": your weights and the profile options (SetWeight). A reading the client may not have
+-- yet (a worn link's stats, a link not loaded) is kept for its frame only.
 local states = D.Cache({ "gear", "level", "talents", "spells", "ratings", "rec:weights" })
 local thisFrame = D.Cache({ "frame" })
 local generation = 0 -- grows whenever the kept results are thrown away
@@ -78,18 +76,17 @@ end
 -- The valuer's settings: itemSpec ("auto" or a tree "1"-"3"), itemProfile ("auto", "leveling", "endgame"), itemWeights
 -- (your changes per class .. tree .. profile). The addon showing them hands its saved table over (V.UseSettings);
 -- without one the defaults count.
-local DEFAULT_SETTINGS = { itemSpec = "auto", itemProfile = "auto", itemWeights = {} }
-local settings = DEFAULT_SETTINGS
-local function Options() return settings end
+local function DefaultSettings() return { itemSpec = "auto", itemProfile = "auto", itemWeights = {} } end
+local settings = DefaultSettings() -- own to this valuer until UseSettings: SetWeight never reaches a shared table
 function V.UseSettings(db)
-    settings = db or DEFAULT_SETTINGS
+    settings = db or DefaultSettings()
     if settings.itemWeights == nil then settings.itemWeights = {} end
-    ns.data.BumpState("rec:weights")
+    D.BumpState("rec:weights")
 end
 
 function V.Weights(class, tree, kind)
-    local base = W[class] and W[class][tree] and W[class][tree][kind] or {}
-    local own = Options() and Options().itemWeights[class .. tree .. kind]
+    local base = WEIGHTS[class] and WEIGHTS[class][tree] and WEIGHTS[class][tree][kind] or {}
+    local own = settings.itemWeights[class .. tree .. kind]
     if not own then return base end
     local merged = {}
     for k, v in pairs(base) do merged[k] = v end
@@ -101,10 +98,9 @@ function V.Profile()
     Fresh()
     if not profile then
         local class, tree = D.PlayerSpec()
-        local options = Options()
-        if options and tonumber(options.itemSpec) then tree = tonumber(options.itemSpec) end
+        if tonumber(settings.itemSpec) then tree = tonumber(settings.itemSpec) end
         tree = tree or ns.ITEM_WEIGHTS_DEFAULT_TREE[class] or 1
-        local kind = options and options.itemProfile ~= "auto" and options.itemProfile
+        local kind = settings.itemProfile ~= "auto" and settings.itemProfile
             or (UnitLevel("player") < MAX_LEVEL and "leveling" or "endgame")
         profile = { class, tree, kind, V.Weights(class, tree, kind) }
     end
@@ -112,20 +108,17 @@ function V.Profile()
 end
 
 function V.SetWeight(key, value)
-    local options = Options()
-    if not options then return end
     local class, tree, kind = V.Profile()
     local id = class .. tree .. kind
-    options.itemWeights[id] = options.itemWeights[id] or {}
-    options.itemWeights[id][key] = value
-    if not next(options.itemWeights[id]) then options.itemWeights[id] = nil end
+    local own = settings.itemWeights
+    own[id] = own[id] or {}
+    own[id][key] = value
+    if not next(own[id]) then own[id] = nil end
     D.BumpState("rec:weights")
 end
 function V.ResetWeights()
-    local options = Options()
-    if not options then return end
     local class, tree, kind = V.Profile()
-    options.itemWeights[class .. tree .. kind] = nil
+    settings.itemWeights[class .. tree .. kind] = nil
     D.BumpState("rec:weights")
 end
 
@@ -137,15 +130,16 @@ local function ItemID(item)
 end
 
 -- an item's stats: a link's as the game tells them (they include random ones: in Forever "of the Wolf" is a bonus ID,
--- not a suffix ID in the link, and the data's randomSuffix flag only comes from items the data collection met), else Pylos
--- Data's (item ID); nil if not known
+-- not a suffix ID in the link, so the data's randomSuffix flag covers only items seen while collecting), else the
+-- data's by item ID; nil if not known
 local function Stats(item)
     local itemID = ItemID(item)
-    local data = itemID and D.ItemStats and D.ItemStats(itemID)
+    local data = itemID and D.ItemStats(itemID)
     if type(item) == "string" then
         local live = D.LiveItemStats(item)
         if live and next(live.stats) then
-            -- (the data's weapon numbers where the game gives none, and its note of effects: the game's stats do not tell them)
+            -- (the data's weapon numbers where the game gives none, and its note of effects, which the game's stats
+            -- do not tell)
             live.dps = live.dps or (data and data.dps)
             live.procs = data and data.procs
             return live
@@ -154,7 +148,6 @@ local function Stats(item)
     if data and not data.randomSuffix then return data end
     return nil
 end
-V.Stats = Stats
 
 local function Worn(slot)
     Fresh()
@@ -175,7 +168,7 @@ end
 -- Valuing
 
 -- the worth of stats in a slot; room: what is left below each cap, nil no cap; parts: key -> worth (to say what makes
--- a difference). No closure or table per call (324 items compared per refresh made 1 MB of garbage).
+-- a difference). No closure or table per call (hundreds of items are compared per refresh).
 local NO_STATS = {}
 -- a stat's amount in the stat's own unit (DPS: damage per second)
 local function Amount(d, key)
@@ -232,14 +225,6 @@ local function Room(kind, replaced)
     return room
 end
 
-function V.Value(item, slot)
-    local data = Stats(item)
-    if not data then return nil end
-    local _, _, kind, weights = V.Profile()
-    local worn = Worn(slot)
-    return Score(data, slot, weights, Room(kind, { worn }))
-end
-
 local function TwoHanderWorn()
     local main = GetInventoryItemID("player", MAIN_HAND)
     return main ~= nil and select(4, C_Item.GetItemInfoInstant(main)) == "INVTYPE_2HWEAPON"
@@ -287,7 +272,8 @@ local function InSlot(data, slot, equipLoc, weights, kind)
     local result = { value = value, worn = worn, gain = value - worn, slot = slot, replaces = first,
         free = #replaced == 0, top = NO_TOP, procs = procs }
     if not result.free and worn > 0 then result.percent = result.gain / worn * 100 end
-    -- what makes the difference, most first: for a gain and for a loss from LOSS_NAMED percent on; most items are neither
+    -- what makes the difference, most first: for a gain and for a loss from LOSS_NAMED percent on (most items are
+    -- neither)
     local sign = result.gain > 0 and 1 or (result.percent and result.percent <= -LOSS_NAMED and -1)
     if sign then
         local diffs = {}
@@ -312,7 +298,8 @@ local function InSlot(data, slot, equipLoc, weights, kind)
     end
     return result
 end
--- the worth of all you wear, caps as you are now: what a gain is measured against (share). Kept with the comparisons (Fresh).
+-- the worth of all you wear, caps as you are now: what a gain is measured against (share). Kept with the
+-- comparisons (Fresh).
 local totalFor, total
 function V.Total()
     Fresh()

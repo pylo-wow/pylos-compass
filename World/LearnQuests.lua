@@ -116,9 +116,9 @@ function D.QuestRepeats(questID)
     return D.QuestFact and D.QuestFact(questID, "repeats") or nil
 end
 
--- Givers, takers and prerequisites: seen in play first, then the client's data (quest-starting
--- items, Data\QuestFacts.lua; next quest from the quest cache), then the 1.12 data
--- (Data\QuestLinks.lua, vmangos). Each answer names its origin:
+-- Givers and takers: seen in play first, then (givers only) the client's data (items that begin the
+-- quest, Data\QuestFacts.lua), then the 1.12 data (Data\QuestLinks.lua, vmangos). Each answer names
+-- its origin:
 --   "seen"  seen in Forever (PylosCompassWorldDB.quests, Data\Seen.lua)
 --   nil     the client's own data
 --   "1.12"  1.12 data only: unchecked
@@ -157,7 +157,9 @@ function D.QuestGivers(questID)
     end
     local q = D.QuestOf and D.QuestOf(questID)
     for _, item in ipairs(q and q.startedBy or {}) do Add("item", item, nil, nil) end
-    for _, p in ipairs(Parties(D.questGivers and D.questGivers[questID])) do Add(p[1], p[2], PlaceOf(p[1], p[2]), "1.12") end
+    for _, p in ipairs(Parties(D.questGivers and D.questGivers[questID])) do
+        Add(p[1], p[2], PlaceOf(p[1], p[2]), "1.12")
+    end
     return list
 end
 -- First of D.QuestGivers: kind, ID, place (NPC: D.npcPlaces; object: spot seen; nil if unknown), origin
@@ -171,8 +173,13 @@ function D.QuestTakers(questID)
     local list, have = {}, {}
     local learned = D.world and D.world.quests and D.world.quests[questID]
     if learned then
-        if learned.to then list[1] = { "npc", learned.to, PlaceOf("npc", learned.to), "seen" } have["npc" .. learned.to] = true
-        elseif learned.toObject then list[1] = { "object", learned.toObject, learned.toPlace, "seen" } have["object" .. learned.toObject] = true end
+        if learned.to then
+            list[1] = { "npc", learned.to, PlaceOf("npc", learned.to), "seen" }
+            have["npc" .. learned.to] = true
+        elseif learned.toObject then
+            list[1] = { "object", learned.toObject, learned.toPlace, "seen" }
+            have["object" .. learned.toObject] = true
+        end
     end
     for _, p in ipairs(Parties(D.questTakers and D.questTakers[questID])) do
         if not have[p[1] .. p[2]] then list[#list + 1] = { p[1], p[2], PlaceOf(p[1], p[2]), "1.12" } end
@@ -193,37 +200,6 @@ function D.QuestPrevious(questID)
     local inLog = D.questPreActive and D.questPreActive[questID]
     if #any == 0 and #all == 0 and not inLog then return nil end
     return { anyOf = any, allOf = all, inLog = inLog, origin = "1.12" }
-end
-
--- Quests a quest opens: list of { questID, origin }; the quest cache's next quest first
--- (origin nil), then quests whose D.QuestPrevious names it ("1.12"), ascending; empty if none
-local opens -- questID -> list of quest IDs (built on first call)
-function D.QuestNext(questID)
-    if not opens then
-        opens = {}
-        for _, map in ipairs({ D.questPre or {}, D.questPreAll or {} }) do
-            for later, text in pairs(map) do
-                for _, earlier in ipairs(IDs(text)) do
-                    opens[earlier] = opens[earlier] or {}
-                    table.insert(opens[earlier], later)
-                end
-            end
-        end
-        for _, list in pairs(opens) do table.sort(list) end
-    end
-    local list, have = {}, {}
-    local q = D.QuestOf and D.QuestOf(questID)
-    if q and q.nextQuest then list[1] = { q.nextQuest, nil } have[q.nextQuest] = true end
-    for _, later in ipairs(opens[questID] or {}) do
-        if not have[later] then have[later] = true list[#list + 1] = { later, "1.12" } end
-    end
-    return list
-end
-
--- Quests that exclude this one (only one of a group can be done; 1.12 data): list of quest IDs, "1.12"
-function D.QuestExclusive(questID)
-    local list = IDs(D.questExclusive and D.questExclusive[questID])
-    return list, #list > 0 and "1.12" or nil
 end
 
 -- Quests an NPC gives and takes back: two ascending lists of quest IDs. As seen in play;

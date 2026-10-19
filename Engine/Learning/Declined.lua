@@ -45,14 +45,14 @@ local function Close(where, keep)
     end)
 end
 
-local function Money() return GetMoney and GetMoney() or 0 end
-
 local function TrainerShown()
-    if not (GetNumTrainerServices and GetTrainerServiceInfo and C_TooltipInfo and C_TooltipInfo.GetTrainerService) then return end
+    if not (GetNumTrainerServices and GetTrainerServiceInfo and C_TooltipInfo and C_TooltipInfo.GetTrainerService) then
+        return
+    end
     for index = 1, GetNumTrainerServices() or 0 do
         local _, kind = GetTrainerServiceInfo(index)
         local cost = GetTrainerServiceCost and GetTrainerServiceCost(index) or 0
-        local data = kind == "available" and cost <= Money() and C_TooltipInfo.GetTrainerService(index)
+        local data = kind == "available" and cost <= GetMoney() and C_TooltipInfo.GetTrainerService(index)
         if data and data.id then Offer("s:" .. data.id, "trainer") end
     end
 end
@@ -60,16 +60,13 @@ end
 local function VendorShown()
     if not (GetMerchantNumItems and GetMerchantItemLink) then return end
     for index = 1, GetMerchantNumItems() or 0 do
+        local info = C_MerchantFrame.GetItemInfo(index)
         local price, extended
-        if C_MerchantFrame and C_MerchantFrame.GetItemInfo then
-            local info = C_MerchantFrame.GetItemInfo(index)
-            if info then price, extended = info.price, info.hasExtendedCost end
-        elseif GetMerchantItemInfo then
-            local _
-            _, _, price, _, _, _, _, extended = GetMerchantItemInfo(index)
-        end
+        if info then price, extended = info.price, info.hasExtendedCost end
         local itemID = D.ItemIDFromLink(GetMerchantItemLink(index))
-        if itemID and price and not D.Secret(price) and price <= Money() and not extended then Offer("i:" .. itemID, "vendor") end
+        if itemID and price and not D.Secret(price) and price <= GetMoney() and not extended then
+            Offer("i:" .. itemID, "vendor")
+        end
     end
 end
 
@@ -95,7 +92,7 @@ local function On(event, fn)
 end
 On("TRAINER_SHOW", TrainerShown)
 On("TRAINER_CLOSED", function()
-    Close("trainer", function(id) return IsPlayerSpell and IsPlayerSpell(tonumber(id:sub(3))) end)
+    Close("trainer", function(id) return D.SpellKnown(tonumber(id:sub(3))) end)
 end)
 On("MERCHANT_SHOW", VendorShown)
 On("MERCHANT_CLOSED", function() Close("vendor") end)
@@ -105,9 +102,18 @@ On("UNIT_SPELLCAST_SUCCEEDED", function(_, _, spellID)
     local recipe = spellID and not D.Secret(spellID) and D.RecipeEntry(spellID)
     if recipe then crafted[recipe.skillLine] = true end
 end)
+-- (a repeatable quest turned in is not flagged completed: only this tells it from an abandoned one)
+local turnedIn = {} -- quest ID -> true, until its removal from the log was judged
+On("QUEST_TURNED_IN", function(questID)
+    if questID and not D.Secret(questID) then turnedIn[questID] = true end
+end)
 On("QUEST_REMOVED", function(questID)
     if not questID or D.Secret(questID) then return end
     C_Timer.After(LATE, function()
-        if not C_QuestLog.IsQuestFlaggedCompleted(questID) then ns.learning.Declined("q:" .. questID, "abandoned") end
+        local done = turnedIn[questID]
+        turnedIn[questID] = nil
+        if not done and not C_QuestLog.IsQuestFlaggedCompleted(questID) then
+            ns.learning.Declined("q:" .. questID, "abandoned")
+        end
     end)
 end)

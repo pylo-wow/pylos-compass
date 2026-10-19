@@ -1,17 +1,18 @@
 local _, D = ...
 
--- The recommendation engine on Data's entries: what to do or look up next, from your situation and what you do.
+-- The engine on the data layer's entries: what to do or look up next, from your situation and what you do.
 -- No interface; the search (Search\) and the recommendations (Advice\) show it. D.engine is this whole table.
 -- Files (Engine\): Core.lua (saved data, needed domains, helpers), Memory.lua (what you do), Reach.lua (how easily you
--- can act now), Reasons.lua + Reasons\*.lua (why something is worth doing), Learning.lua (personal reason weights),
--- ItemValue\ (item valuer), Relevant.lua (most relevant across domains), API.lua (public interface).
--- Saved data: PylosCompassEngineDB (chosen, did, bought, skipped, hidden, reasonStats, upgradesJudged, seenItems, seenZones,
--- learningVersion).
+-- can act now), Reasons.lua + Reasons\*.lua (why something is worth doing), Learning.lua + Learning\*.lua (personal
+-- reason weights), ItemValue\Weights.lua + ItemValue\Value.lua (item valuer), Relevant.lua (most relevant across
+-- domains), API.lua (public interface).
+-- Saved data: PylosCompassEngineDB (chosen, did, bought, skipped, hidden, reasonStats, upgradesJudged, seenItems,
+-- seenZones).
 local ns = { data = D, L = D.L, DOT = D.DOT }
 D.engine = ns
 
 -- Helpers
--- Small ones live in Data (D.CharacterKey, D.ItemIDFromLink, D.Decay, D.YardsMinutes, D.Secret, D.On).
+-- Small ones live in the data layer (D.CharacterKey, D.ItemIDFromLink, D.Decay, D.YardsMinutes, D.Secret, D.On).
 
 ns.Character = D.CharacterKey
 
@@ -25,10 +26,10 @@ function ns.FormatPattern(format, numbers, whole)
     return "^" .. pattern .. (whole and "$" or "")
 end
 
--- The activity log (Log.lua, developer only): a no-op without it.
+-- Activity log hook: does nothing unless something replaces it.
 ns.Log = function() end
 
--- Game events via Data's one frame (D.On): fn(event, ...); UNIT_ events only for the player.
+-- Game events through the one frame of D.On: fn(event, ...); UNIT_ events only for the player.
 -- Prefer a D.OnState state where there is one.
 function ns.On(event, fn)
     if event:find("^UNIT_") then
@@ -39,7 +40,21 @@ function ns.On(event, fn)
     return D.On(event, fn)
 end
 
--- the suggestions look at every domain
+ns.RECENT = 40 -- recent choices looked at (Relevant.lua, Reasons\LookedUp.lua)
+
+-- How fresh a record stamped with time() is: 1 right after, 0 after window seconds; nil without a stamp. A faded one
+-- is dropped from store[key].
+function ns.Fade(store, key, at, window)
+    if not at then return nil end
+    local share = 1 - (time() - at) / window
+    if share <= 0 then
+        store[key] = nil
+        return nil
+    end
+    return share
+end
+
+-- the engine looks at every domain
 for _, key in ipairs({ "spells", "items", "professions", "npcs", "dungeons", "zones", "quests" }) do
     D.Need(key, "engine", true)
 end
@@ -57,11 +72,9 @@ local DEFAULTS = {
     upgradesJudged = {},  -- per character: the upgrades already learned from (Learning\Upgrades.lua)
     seenItems = {},       -- per character: the items ever had (Reasons\Looted.lua)
     seenZones = {},       -- per character: the zones ever been in (Reasons\NewHere.lua)
-    learningVersion = 1,
 }
--- the learning's saved data brought up to date, what has faded goes
+-- what has faded goes
 local function Ready()
-    ns.learning.Load()
     ns.memory.Prune()
     ns.learning.PruneJudged()
 end
