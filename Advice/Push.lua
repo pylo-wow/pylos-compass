@@ -310,16 +310,22 @@ function Evaluate(why)
         ns.reasons.Refresh() -- rules read current reasons
     end)
     if ok then
+        local allRan = true
         for _, rule in ipairs(rules) do
             if Enabled(rule) then
                 local done, err = pcall(rule.candidates, function(c) Decide(rule, c, present) end)
-                if not done then geterrorhandler()(err) end
+                if not done then
+                    allRan = false
+                    geterrorhandler()(err)
+                end
             end
         end
-        ok, problem = pcall(function()
-            Watch(present)
-            if push.QuietChanged then push.QuietChanged() end
-        end)
+        if allRan then
+            ok, problem = pcall(function()
+                Watch(present)
+                if push.QuietChanged then push.QuietChanged() end
+            end)
+        end
     end
     running = false
     if not ok then geterrorhandler()(problem) end

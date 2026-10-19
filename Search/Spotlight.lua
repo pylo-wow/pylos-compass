@@ -55,6 +55,7 @@ end
 --                     typing name if the entry is not built or switched off. Out of combat only.
 --   BackgroundAlpha() window background opacity, 0-1
 local function Show(id, name)
+    if ns.db.searchOn == false then return end
     if InCombatLockdown() then return Open() end
     -- state is set at once; the bar is not shown yet in this frame
     if not ui.bar:IsShown() or S.closingAt then Open(true) end
@@ -108,7 +109,7 @@ ns.data.On("PLAYER_ENTERING_WORLD", function(_, isInitialLogin)
     -- loading screen is still up: build the small sources here, unseen
     ns.index.BuildMissing()
     -- once: default key if neither key nor command is taken
-    if ns.db.defaultKeySet then return end -- once, also after installing and /reload
+    if ns.db.defaultKeySet or ns.db.searchOn == false then return end -- once, also after installing and /reload
     ns.db.defaultKeySet = true
     local taken = GetBindingAction(DEFAULT_KEY)
     if not GetBindingKey(COMMAND) and (taken == nil or taken == "") then

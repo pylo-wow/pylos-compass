@@ -672,6 +672,12 @@ function ns.ToggleWindow()
         W.Error(L["The recommendations open after combat."])
         return
     end
+    if window and not window.Open then window = nil end -- a window that failed half way through Build: build it again
     window = window or Build()
     if window:IsShown() and not window.closingAt then window.Close() else window.Open() end
+end
+
+-- the switch "Recommendations" went off
+function ns.CloseWindow()
+    if window and window:IsShown() then window.Close(true) end
 end
