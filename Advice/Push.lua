@@ -1,5 +1,4 @@
 local ns = select(2, ...).advice
-if ns.off then return end
 local D = ns.data
 
 -- Nudges: unprompted alerts with a rule set of their own (Pushes.lua), on the same facts as the window (reasons, reach, memory).
@@ -10,7 +9,7 @@ local D = ns.data
 --   budget (medium at most every MEDIUM_EVERY, loud every LOUD_EVERY; a rule may own its budget)
 -- Levels (Toast.lua): 1 quiet (button glow, tab dot), 2 medium (short note, at a moment), 3 loud (note and sound until answered, out of combat).
 -- A rule gives its highest level; one lower when 2 of the last 3 were ignored/"Later", by options (a level switched off gives the one below), quiet over budget.
--- "Never for this" switches the rule off. Every decision, near miss (one gate failed) and outcome goes to ns.Log (Log.lua, dev build).
+-- "Never for this" switches the rule off. Every decision, near miss (one gate failed) and outcome goes to ns.Log (a no-op unless the dev tools replace it).
 --   ns.RegisterPush(rule): rule = { key, label, level, topic (tab for the dot, or nil), states (Data states to re-evaluate on), ownBudget, candidates(add) }
 --   add(c): c = { situation (identity: nudges once per AGAIN seconds), entry, title, text, icon, level,
 --   action = { kind = "item" | "macro" | "waypoint", value, name }, big/missable/sure = { ok, words } }
@@ -29,18 +28,28 @@ local FOLLOW = 30 * 60      -- seconds a shown nudge waits to be followed
 local MOMENT = 30           -- seconds a pause lasts after its event
 local JUST_DONE = 30 * 60   -- an entry acted on within this is not new
 local HISTORY = 80          -- decisions kept for the debug window
+local MAX_SESSION = 500     -- entries in pushedAt / nearLogged before they restart
 
 local rules, byKey = {}, {}
 push.rules = rules
 local pushedAt = {}   -- situation -> time() nudged (also saved per character)
 local laterUntil = {} -- situation -> time() before which "Later" holds
 local nearLogged = {} -- situation -> true once a near miss is logged
+local sizes = {}
+-- the two session caches stay bounded; pushedAt is only a cache of the saved times, a restart costs nothing
+local function Put(t, key, value)
+    if t[key] == nil then
+        sizes[t] = (sizes[t] or 0) + 1
+        if sizes[t] > MAX_SESSION then wipe(t); sizes[t] = 1 end
+    end
+    t[key] = value
+end
 local waiting = {}    -- situation -> { c, rule, level }: waits for a moment
 local quiet = {}      -- situation -> { topic, rule key, at }
 push.quiet = quiet    -- shared with Toast.lua; do not replace
 local shown = {}      -- nudges shown, watched for being followed
 local lastAt = { [MEDIUM] = 0, [LOUD] = 0 }
-push.history = {}     -- the latest decisions, newest first (Debug.lua)
+push.history = {}     -- the latest decisions, newest first; only filled while push.trace is set (dev window, tests)
 
 function ns.RegisterPush(rule)
     rules[#rules + 1] = rule
@@ -65,6 +74,7 @@ local function Gates(c, moment)
 end
 
 local function Note(outcome, rule, c, level, moment, extra)
+    if not push.trace then return end
     local id = c and c.entry and D.EntryID(c.entry) or "-"
     local gates = c and Gates(c, moment) or ""
     ns.Log("push", outcome, rule.key, id, level and LEVEL_NAMES[level] or "-", gates,
@@ -158,7 +168,6 @@ function push.QuietTopic(topic)
     end
     return false
 end
-function push.HasQuiet() return next(quiet) ~= nil end
 -- Window opened or tab looked at: clears the dots. Returns the entries of the quiet nudges seen (entry -> true); the window shows them first, with the dot (Window.lua).
 function push.SeenTopic(topic)
     local entries = {}
@@ -213,7 +222,7 @@ local function Level(rule, c)
 end
 
 local function Show(rule, c, level)
-    pushedAt[c.situation] = time()
+    Put(pushedAt, c.situation, time())
     local saved = Saved()
     if saved then saved.at[c.situation] = time() end
     waiting[c.situation] = nil
@@ -244,7 +253,7 @@ local function Decide(rule, c, present)
     if failed > 0 then
         -- near miss: one gate short (except "nudged before")
         if failed == 1 and not (failedGate == "new" and words == "nudged before") and not nearLogged[c.situation] then
-            nearLogged[c.situation] = true
+            Put(nearLogged, c.situation, true)
             Note("near", rule, c, nil, nil, failedGate)
         end
         return

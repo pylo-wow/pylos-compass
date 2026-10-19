@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 local ns = D.engine
 local L = ns.L
 

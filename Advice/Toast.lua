@@ -1,5 +1,4 @@
 local ns = select(2, ...).advice
-if ns.off then return end
 local L = ns.L
 local W = ns.widgets
 local push = ns.push

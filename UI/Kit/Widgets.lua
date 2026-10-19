@@ -128,7 +128,13 @@ driver:SetScript("OnUpdate", function(self, elapsed)
     for i = 1, #moving do
         local record = moving[i]
         if not record.dead then
-            if record.target then StepFollow(record, elapsed) else StepTween(record, now) end
+            -- an error ends only this record and is reported; it must not repeat every frame
+            local ok, err
+            if record.target then ok, err = pcall(StepFollow, record, elapsed) else ok, err = pcall(StepTween, record, now) end
+            if not ok then
+                Remove(record)
+                geterrorhandler()(err)
+            end
         end
     end
     local kept = 0
@@ -205,7 +211,7 @@ function W.FeatureTip(tip, owner, anchor, title, text, color)
     tip:Show()
 end
 
--- An entry's name and lines (lines from Pylos Data, World\Lines.lua: { text,
+-- An entry's name and lines (lines from the data, World\Lines.lua: { text,
 -- role, wrap }). An NPC's name takes the colour of its reaction to you, as in
 -- the game. Returns whether there were lines.
 local REACTION = { { 1, 0.25, 0.2 }, { 1, 0.9, 0.2 }, { 0.3, 1, 0.3 } } -- hostile, neutral, friendly
@@ -378,7 +384,7 @@ function W.Window(options)
     window:SetScript("OnDragStop", function()
         if not window.dragging then return end
         window.dragging = nil
-        window:StopMovingOrSizing()
+        pcall(window.StopMovingOrSizing, window) -- may be blocked if combat began during the drag
         if Frozen() then return end
         -- StartMoving anchors anew: back to the top left corner, the form that is saved
         local left, top = window:GetLeft(), window:GetTop()
@@ -793,10 +799,16 @@ function W.Menu(options)
     blocker:SetAllPoints(UIParent)
     blocker:EnableMouse(true)
     blocker:EnableMouseWheel(true)
-    blocker:SetScript("OnMouseDown", function() menu:Hide() end)
+    blocker:SetScript("OnMouseDown", function()
+        blocker:Hide() -- even if the menu cannot hide (combat), the layer must not outlive the click
+        menu:Hide()
+    end)
     blocker:SetScript("OnMouseWheel", function() end)
     blocker:Hide()
     local tooltip = options.tooltip
+    if type(tooltip) ~= "table" or not tooltip.GetOwner then
+        error("W.Menu: options.tooltip must be a tooltip frame (GameTooltip or a copy)", 2)
+    end
     -- the tooltip belongs to a symbol of this menu
     local function OwnTip()
         local owner = tooltip:GetOwner()
@@ -904,6 +916,8 @@ function W.Menu(options)
     end
 
     function menu.Open(groups, anchor, bar)
+        -- its secure rows make it a protected frame: no showing, re-anchoring or re-arming in combat
+        if InCombatLockdown() then return end
         tooltip:Hide()
         wipe(menu.slots)
         rules = 0
@@ -919,8 +933,8 @@ function W.Menu(options)
                     if item.icon then SetSymbol(row.icon, item.icon) end
                     row.icon:SetShown(item.icon ~= nil)
                     row.run = item[2]
-                    row.spell = not InCombatLockdown() and item[3] or nil
-                    row.macro = not InCombatLockdown() and item.macro or nil
+                    row.spell = item[3]
+                    row.macro = item.macro
                     if row.spell then
                         row.secure:SetAttribute("type", "spell")
                         row.secure:SetAttribute("spell", row.spell)
@@ -928,7 +942,7 @@ function W.Menu(options)
                         row.secure:SetAttribute("type", "macro")
                         row.secure:SetAttribute("macrotext", row.macro)
                     end
-                    if not InCombatLockdown() then row.secure:SetShown(row.spell ~= nil or row.macro ~= nil) end -- (a protected frame: no hiding in combat)
+                    row.secure:SetShown(row.spell ~= nil or row.macro ~= nil)
                     row:ClearAllPoints()
                     row:SetPoint("TOPLEFT", 6, y)
                     row:SetPoint("TOPRIGHT", -6, y)
@@ -981,7 +995,16 @@ function W.Menu(options)
     -- a click anywhere else closes it (global mouse event: also on frames not ours)
     local closer = CreateFrame("Frame")
     pcall(closer.RegisterEvent, closer, "GLOBAL_MOUSE_DOWN")
-    closer:SetScript("OnEvent", function()
+    closer:RegisterEvent("PLAYER_REGEN_DISABLED")
+    closer:SetScript("OnEvent", function(_, event)
+        if event == "PLAYER_REGEN_DISABLED" then
+            if not menu:IsShown() then return end
+            -- hide the armed secure lines first, then the menu; blocker is ours and never protected by this file
+            for _, row in ipairs(menu.rows) do row.secure:Hide() end
+            blocker:Hide()
+            menu:Hide()
+            return
+        end
         if not menu:IsShown() or GetTime() - menu.shownAt < MENU_GUARD then return end
         local focus = GetMouseFoci and GetMouseFoci()[1] or (GetMouseFocus and GetMouseFocus())
         while focus do

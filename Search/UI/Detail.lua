@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 local L = ns.L
 
 -- The detail view: where the list is: icon and head (the entry's row in large), below it previews of its

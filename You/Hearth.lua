@@ -1,8 +1,7 @@
 local _, D = ...
-if D.off then return end
 
 -- Travel facts per character in PylosCompassWorldDB.travel.chars["Name-Realm"]:
---   mount      last seen mount run speed, yards/s (GetUnitSpeed while mounted)
+--   mount      mount run speed, yards/s (GetUnitSpeed while mounted; see Ride)
 --   hearth     bind place (uiMapID * 1000000 + x * 1000 + y), taken where you stand on HEARTHSTONE_BOUND
 --   hearthName inn name (GetBindLocation); if it differs now, hearth is unused
 -- D.Hearth(): place and HEARTH minutes if the stone is in your bags and off cooldown, else nil.
@@ -34,14 +33,25 @@ function D.Hearth()
     return mine.hearth, HEARTH
 end
 
+-- A speed buff (potion, food, Carrot on a Stick) looks like a faster mount: a lower speed is taken at once,
+-- a higher one only when a second mounting shows it again.
+local higher = {} -- character -> a speed above the stored one, seen once
 local function Ride()
     if not (IsMounted and IsMounted() and GetUnitSpeed) then return end
     local _, run = GetUnitSpeed("player")
-    local mine = Mine()
-    if mine and not D.Secret(run) and run and run > D.RUN_SPEED and mine.mount ~= run then
-        mine.mount = run
-        D.BumpState("travel")
+    local mine, key = Mine(), D.CharacterKey()
+    if not mine or not run or D.Secret(run) or run <= D.RUN_SPEED then return end
+    if mine.mount == run then
+        higher[key] = nil
+        return
     end
+    if mine.mount and run > mine.mount and higher[key] ~= run then
+        higher[key] = run
+        return
+    end
+    higher[key] = nil
+    mine.mount = run
+    D.BumpState("travel")
 end
 
 -- Not recorded in instances

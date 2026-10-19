@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 local D = ns.data
 
 -- Which links come first for which kind of entry. The detail view previews the first ones that have rows

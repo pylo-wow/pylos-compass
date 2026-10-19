@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 local ns = D.engine
 
 -- Memory: what you do, learned over time, keyed by Data entry IDs ("s:133", "i:2589", "n:1234"). A host

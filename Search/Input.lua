@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 
 -- Keys while the bar is open. The bar is no EditBox: a focused EditBox swallows Enter, and spells
 -- can only be cast by a key binding or a click on a secure button. So a frame passing every key on
@@ -216,8 +215,10 @@ function input.ClearKeys()
 end
 -- when the fight ends: the keys go back to the game if the bar did not open again meanwhile
 ns.data.On("PLAYER_REGEN_ENABLED", function()
-    if clearPending and not ns.ui.bar:IsShown() then ClearOverrideBindings(ns.ui.bar) end
-    clearPending = false
+    if clearPending and not ns.ui.bar:IsShown() then
+        ClearOverrideBindings(ns.ui.bar)
+        clearPending = false
+    end
 end)
 
 -- Without the keyboard (click outside, option "clickOutside"): keys go back to the game, only Escape

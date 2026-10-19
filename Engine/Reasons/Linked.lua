@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 local ns = D.engine
 local L = ns.L
 
@@ -9,6 +8,7 @@ local L = ns.L
 
 local FRESH = 5 * 60 -- seconds a link counts
 local linked = {}    -- entry ID -> { time(), who }
+local MAX = 200  -- more than this many: the faded ones go (on write, so a busy channel cannot grow it for hours)
 
 local EVENTS = { "CHAT_MSG_SAY", "CHAT_MSG_YELL", "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER", "CHAT_MSG_RAID",
     "CHAT_MSG_RAID_LEADER", "CHAT_MSG_GUILD", "CHAT_MSG_OFFICER", "CHAT_MSG_WHISPER", "CHAT_MSG_CHANNEL",
@@ -29,7 +29,16 @@ local function Heard(_, text, sender, _, _, _, _, _, _, _, _, _, guid)
             any = true
         end
     end
-    if any then D.BumpState("rec:linked") end
+    if any then
+        local count = 0
+        for _ in pairs(linked) do count = count + 1 end
+        if count > MAX then
+            for id, link in pairs(linked) do
+                if now - link[1] >= FRESH then linked[id] = nil end
+            end
+        end
+        D.BumpState("rec:linked")
+    end
 end
 for _, event in ipairs(EVENTS) do ns.On(event, Heard) end
 

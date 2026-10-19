@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- Items you carry or wear; rescanned when the states "bags"/"gear" change, call D.RefreshOwned before reading.
 

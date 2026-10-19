@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 local ns = D.engine
 
 -- The names the search and the recommendations call on the engine (D.engine); the rest of the engine is internal.

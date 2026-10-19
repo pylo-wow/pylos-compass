@@ -122,7 +122,8 @@ end
 Offer("kit", { version = VERSION, Saved = Saved, NewLocale = NewLocale })
 
 local function Problem(text)
-    print(CHAT_NAME:format(ns.options and ns.options.title or addonName) .. ": " .. text)
+    local options = ns.options
+    print(CHAT_NAME:format(tostring(type(options) == "table" and options.title or addonName)) .. ": " .. text)
 end
 
 -- Colors
@@ -270,6 +271,8 @@ end
 local function KeyBindingButton(row, command)
     local button = CreateFrame("Button", nil, row.frame, "UIPanelButtonTemplate")
     local function Show()
+        -- the label is no longer "Press a key": a capture left on would bind the next Enter or W unseen
+        button:EnableKeyboard(false)
         local key = GetBindingKey(command)
         button:SetText(key and GetBindingText(key) or L["Not bound"])
     end
@@ -325,6 +328,11 @@ local function Build()
     local changeHandlers = {} -- key -> list of handlers, called with the new value
 
     local function OpenOptions()
+        -- Settings.OpenToCategory is flagged HasRestrictions (SettingsUtilDocumentation.lua)
+        if InCombatLockdown() then
+            Problem(L["the options cannot be opened in combat."])
+            return
+        end
         Settings.OpenToCategory(category:GetID())
     end
 
@@ -332,9 +340,9 @@ local function Build()
     local function SetOption(key, value)
         db[key] = value
         for _, handler in ipairs(changeHandlers[key] or {}) do handler(value) end
-        if page then page.Layout() end
+        -- closed: the next OnRefresh lays out anyway (a parentless panel counts as visible, so the first call still runs)
+        if page and page.panel:IsVisible() then page.Layout() end
     end
-    Offer("SetOption", SetOption)
 
     local function OnChange(key, handler)
         changeHandlers[key] = changeHandlers[key] or {}
@@ -360,12 +368,14 @@ local function Build()
         UpdateButtonState()
     end
 
+    local function ToggleText() return tostring(master.toggleText or title) end
+
     local function LeftClick()
         if options.onLeftClick then
             options.onLeftClick()
         elseif master then
             SetOption(master.key, not db[master.key])
-            print(L[db[master.key] and "%s: %s on" or "%s: %s off"]:format(CHAT_NAME:format(title), master.toggleText))
+            print(L[db[master.key] and "%s: %s on" or "%s: %s off"]:format(CHAT_NAME:format(title), ToggleText()))
         else
             OpenOptions()
         end
@@ -453,7 +463,7 @@ local function Build()
             GameTooltip:SetOwner(self, "ANCHOR_LEFT")
             GameTooltip:SetText(title)
             if options.onTooltip then options.onTooltip(GameTooltip) end
-            local leftClick = options.leftClickText or (master and L["%s on/off"]:format(master.toggleText))
+            local leftClick = options.leftClickText or (master and L["%s on/off"]:format(ToggleText()))
             if leftClick then
                 GameTooltip:AddLine(L["Left-click: %s"]:format(leftClick), 1, 1, 1)
             end
@@ -516,6 +526,9 @@ local function Build()
             local key = entry.key or "minimap"
             row = AddPageRow(page, ROW_HEIGHT, kind == "minimap" and L["Show minimap button"] or entry.label)
             local box = CreateFrame("CheckButton", nil, row.frame, "SettingsCheckboxTemplate")
+            -- the template's own OnEnter/OnLeave show Blizzard's (empty) SettingsTooltip; keep only its hover background
+            box:SetScript("OnEnter", function(self) if self.HoverBackground then self.HoverBackground:Show() end end)
+            box:SetScript("OnLeave", function(self) if self.HoverBackground then self.HoverBackground:Hide() end end)
             box:SetPoint("LEFT", row.frame, "CENTER", -80, 0)
             box:SetScript("OnClick", function(self) SetOption(key, self:GetChecked() and true or false) end)
             row.control = box
@@ -615,13 +628,20 @@ local function Build()
     end
 
     options = ns.options
+    if type(options) ~= "table" then
+        Problem(L["its options are not a table, they are not built."])
+        return
+    end
     title = options.title or addonName
     if type(options.savedVariable) ~= "string" then
         Problem(L["its options name no savedVariable, they are not built."])
         return
     end
     for _, entry in ipairs(options) do
-        if TYPES[entry.type] then
+        if entry.type == "slider" and not (type(entry.key) == "string" and type(entry.default) == "number"
+                and type(entry.min) == "number" and type(entry.max) == "number" and entry.max > entry.min) then
+            Problem(L["the slider \"%s\" needs a key, a default, min and max (max above min), its row is left out."]:format(tostring(entry.label or entry.key)))
+        elseif TYPES[entry.type] then
             entries[#entries + 1] = entry
         else
             Problem(L["the option type \"%s\" is unknown, its row is left out."]:format(tostring(entry.type)))
@@ -638,6 +658,7 @@ local function Build()
     local schema = options.schema or {}
     db = Saved(options.savedVariable, { defaults = defaults, version = schema.version, migrations = schema.migrations })
     ns.db = db -- even when set: some addons hold false here until now
+    Offer("SetOption", SetOption) -- only now: it needs db
 
     CreateMinimapButton()
     BuildMenu()

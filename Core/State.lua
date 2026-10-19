@@ -182,7 +182,7 @@ local EVENTS = {
     ZONE_CHANGED = { "zone" }, ZONE_CHANGED_INDOORS = { "zone" }, ZONE_CHANGED_NEW_AREA = { "zone" },
     QUEST_LOG_UPDATE = { "quests" }, QUEST_ACCEPTED = { "quests" }, QUEST_REMOVED = { "quests" },
     QUEST_TURNED_IN = { "quests" },
-    SPELLS_CHANGED = { "spells" }, LEARNED_SPELL_IN_TAB = { "spells" }, LEARNED_SPELL_IN_SKILL_LINE = { "spells" },
+    SPELLS_CHANGED = { "spells" }, LEARNED_SPELL_IN_SKILL_LINE = { "spells" },
     SKILL_LINES_CHANGED = { "skills" },
     PLAYER_TALENT_UPDATE = { "talents" }, TRAIT_CONFIG_UPDATED = { "talents" }, CHARACTER_POINTS_CHANGED = { "talents" },
     PLAYER_LOGIN = { "talents" },

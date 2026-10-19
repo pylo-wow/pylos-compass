@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- The last file: the options page of Pylos Compass (head, switches, minimap button, the rows of the search and of
 -- the recommendations) and the global API. Kit\Kit.lua builds the page at ADDON_LOADED from D.options.
@@ -68,10 +67,11 @@ local options = {
         advice.options.onLoad(db)
     end,
 
-    { type = "checkbox", key = "searchOn", label = L["Search"], default = true, onChange = SearchSwitched,
-      tooltip = L["The search bar: a key opens it, type a few letters, Enter uses the result."] },
-    { type = "checkbox", key = "adviceOn", label = L["Recommendations"], default = true, onChange = AdviceSwitched,
-      tooltip = L["The window with what is worth doing next, and the nudges."] },
+    { type = "checkbox", key = "searchOn", label = L["Enable the search"], default = true, onChange = SearchSwitched,
+      -- the shared game data is built either way (the recommendations need it too)
+      tooltip = L["The search bar: a key opens it, type a few letters, Enter uses the result. Switched off, the bar stays closed and its lists are dropped; the game data stays loaded."] },
+    { type = "checkbox", key = "adviceOn", label = L["Enable the recommendations"], default = true, onChange = AdviceSwitched,
+      tooltip = L["The window with what is worth doing next, and the nudges. Switched off, the window and nudges stay away; the game data stays loaded."] },
     { type = "minimap" },
     { type = "header", label = L["Search settings"] },
 }

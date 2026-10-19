@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 local L = ns.L
 
 -- Quality: one filter per quality, named and coloured as in the game ("Epic" in purple), found by its

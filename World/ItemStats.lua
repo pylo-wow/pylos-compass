@@ -1,7 +1,7 @@
 local _, D = ...
 if D.off then return end
 
--- Stats of wearable items (Data\ItemStats.lua, from the client tables plus DataGrabber data),
+-- Stats of wearable items (Data\ItemStats.lua, from the client tables plus data collected in the game),
 -- for valuing items by class and spec. Items with random stats ("of the Bear") have none here
 -- (randomSuffix); their link does (D.LiveItemStats).
 -- D.ItemStats(itemID) -> nil (unknown) or a shared table (do not change):

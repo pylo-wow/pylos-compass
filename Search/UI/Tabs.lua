@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 
 -- The tabs: the categories on top of the bar, the close tab at the end of their row, and the subcategories left of the window below the bar.
 

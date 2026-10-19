@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- What a trainer teaches, from its window (any state: available, too high, known), gathered
 -- over visits; the 1.12 data had a fisherman teach Find Fish, Forever's does not (seen in game).

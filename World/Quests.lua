@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- Quests: every quest with a title (Data\QuestNames_enUS.lua) and facts from the client's quest
 -- cache (Data\QuestFacts.lua; format in its header), as entries { name, questID } with ID

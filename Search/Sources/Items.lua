@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 local L = ns.L
 local D = ns.data
 
@@ -63,6 +62,7 @@ end
 -- hotkey shows there)
 local RECIPE_STATES = { known = { L["Already known"], "done" }, profession = { L["Profession not learned"], "no" },
     specialization = { L["Other specialization"], "no" }, skill = { L["Skill too low"], "no" } }
+ns.RECIPE_STATES = RECIPE_STATES -- (UI\List.lua)
 local function State(entry)
     local recipe = RECIPE_STATES[entry.recipeState]
     if recipe then return recipe[1], recipe[2] end

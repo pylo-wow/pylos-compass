@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 local ns = D.engine
 
 -- Suggestions on offer right there and passed: an active choice against them, which says more than a suggestion simply
@@ -59,11 +58,18 @@ local function TrainerShown()
 end
 
 local function VendorShown()
-    if not (GetMerchantNumItems and GetMerchantItemLink and GetMerchantItemInfo) then return end
+    if not (GetMerchantNumItems and GetMerchantItemLink) then return end
     for index = 1, GetMerchantNumItems() or 0 do
-        local _, _, price, _, _, _, _, extended = GetMerchantItemInfo(index)
+        local price, extended
+        if C_MerchantFrame and C_MerchantFrame.GetItemInfo then
+            local info = C_MerchantFrame.GetItemInfo(index)
+            if info then price, extended = info.price, info.hasExtendedCost end
+        elseif GetMerchantItemInfo then
+            local _
+            _, _, price, _, _, _, _, extended = GetMerchantItemInfo(index)
+        end
         local itemID = D.ItemIDFromLink(GetMerchantItemLink(index))
-        if itemID and price and price <= Money() and not extended then Offer("i:" .. itemID, "vendor") end
+        if itemID and price and not D.Secret(price) and price <= Money() and not extended then Offer("i:" .. itemID, "vendor") end
     end
 end
 

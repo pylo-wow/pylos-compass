@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- Dungeons and raids from Data\Dungeons_*.lua (client tables): level range, players, entrance
 -- zone (unknown for instances new in Forever), bosses in order. Also group levels, level fit

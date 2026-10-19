@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 
 -- The search index of every source, and the search.
 -- Search runs on every keystroke. Measured with 100,000 entries: scanning all took up to 26 ms per key; the tiers

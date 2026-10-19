@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- NPCs: every server NPC (Data\NPCNames_enUS.lua) with title and facts (Data\NPCFacts.lua):
 -- type, rank and model from the client's creature cache (1.12's where the cache lacks the NPC);

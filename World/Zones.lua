@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- Zones that have quests (Data\QuestFacts.lua: a quest's zone), as entries { name, zoneID }
 -- with ID "z:<uiMapID>", and what their quests say: the levels they are for and how many are

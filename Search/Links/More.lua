@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 local L = ns.L
 local D = ns.data
 
@@ -31,7 +30,6 @@ local function ZoneRow(zoneID, info)
     row.low, row.high = low, high
     return row
 end
-ns.ZoneRow = ZoneRow
 
 -- Zones in the order that suits you: the one you are in, then those of your continent, then by how near
 -- their levels are to yours; the given order (the fullest first) breaks ties.

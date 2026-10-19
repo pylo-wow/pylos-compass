@@ -4,7 +4,7 @@ local ns = D.engine
 
 -- The item valuer: what an item is worth to your character by its stats (D.ItemStats; the facts stay there), weighed for
 -- your class, talent tree and level (Weights.lua) with caps for hit and defense. A module apart from the reasons:
--- Reasons\Upgrade.lua asks it via ns.UpgradeOf (the one check of "an upgrade for you"), other addons via ns.ItemValue.
+-- the host asks it via ns.UpgradeOf (the one check of "an upgrade for you"), other addons via ns.ItemValue.
 --   Compare(item)   item: item ID or link -> nil (not wearable, or stats unknown), else { value, worn, gain,
 --                   percent (against what you wear there; nil: free slot), share (gain in percent of all you wear),
 --                   free, slot, replaces (item ID or nil), top = { stat key, ... } (what makes the difference, most
@@ -137,7 +137,7 @@ local function ItemID(item)
 end
 
 -- an item's stats: a link's as the game tells them (they include random ones: in Forever "of the Wolf" is a bonus ID,
--- not a suffix ID in the link, and the data's randomSuffix flag only comes from items the DataGrabber met), else Pylos
+-- not a suffix ID in the link, and the data's randomSuffix flag only comes from items the data collection met), else Pylos
 -- Data's (item ID); nil if not known
 local function Stats(item)
     local itemID = ItemID(item)
@@ -177,6 +177,11 @@ end
 -- the worth of stats in a slot; room: what is left below each cap, nil no cap; parts: key -> worth (to say what makes
 -- a difference). No closure or table per call (324 items compared per refresh made 1 MB of garbage).
 local NO_STATS = {}
+-- a stat's amount in the stat's own unit (DPS: damage per second)
+local function Amount(d, key)
+    if key == "DPS" or key == "RDPS" then return d.dps or 0 end
+    return (d.stats or NO_STATS)[key] or 0
+end
 local function Score(data, slot, weights, room, parts)
     local total = 0
     for key, amount in pairs(data.stats or NO_STATS) do
@@ -298,9 +303,8 @@ local function InSlot(data, slot, equipLoc, weights, kind)
         -- by how much each differs, in the stat's own unit (DPS: damage per second)
         local amounts = {}
         for _, key in ipairs(keys) do
-            local function Amount(d) if key == "DPS" or key == "RDPS" then return d.dps or 0 end return (d.stats or NO_STATS)[key] or 0 end
-            local diff = Amount(data)
-            for _, stats in ipairs(replaced) do diff = diff - Amount(stats) end
+            local diff = Amount(data, key)
+            for _, stats in ipairs(replaced) do diff = diff - Amount(stats, key) end
             amounts[key] = diff
         end
         if sign > 0 then result.top, result.topAmounts = keys, amounts

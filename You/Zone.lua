@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- Current zone (uiMapID): the best map climbed up to its zone. In a cave or at a dungeon entrance
 -- the game names only the continent, so match the zone text against the continent's zones.

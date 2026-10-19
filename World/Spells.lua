@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- Spells: active spell book spells, professions included, each once in its highest rank, plus
 -- the trainer's not-yet-learned spells (hidden = true; hosts show them only on purpose).

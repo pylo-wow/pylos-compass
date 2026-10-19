@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- Professions: recipes of every profession (Data\ProfessionSpells.lua). Learned ones are plain
 -- entries, the others hidden = true. Icon is the made item's if any. Built in the background

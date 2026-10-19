@@ -5,7 +5,7 @@ local _, ns = ...
 -- ItemSparse with the client's hotfixes laid over it (Cache\ADB\enUS\DBCache.bin, build
 -- 70450): 4865 hotfix rows with their facts; the hotfix-only items have no German name.
 -- Plus 15 items neither has (Forever items): names and facts from what the game
--- gave Pylos DataGrabber (GetItemInfo and the item tooltip, build
+-- gave the data collection (GetItemInfo and the item tooltip, build
 -- 1.60.1.70338); they have no German name.
 -- Facts about every item, without asking the client (which only knows loaded
 -- items): pairs of item ID and a packed number = quality + required level * 8

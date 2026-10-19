@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 local L = ns.L
 
 -- The filter window: right of the window below the bar (bronze frame), with the filters that fit the category

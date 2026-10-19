@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 local ns = D.engine
 
 -- What is most relevant now across Data's domains (the search's start page shows it; Learning.lua watches whether

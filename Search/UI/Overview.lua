@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 
 -- A category's page when opened without text (source.overview, only Professions): its overviewEntries() in
 -- two columns, each with icon, name and a bar of entry.bar = { value, maximum, text, { r, g, b }, fill atlas }.

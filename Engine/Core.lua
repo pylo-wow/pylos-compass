@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- The recommendation engine on Data's entries: what to do or look up next, from your situation and what you do.
 -- No interface; the search (Search\) and the recommendations (Advice\) show it. D.engine is this whole table.

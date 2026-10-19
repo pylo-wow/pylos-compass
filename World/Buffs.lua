@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- Buffs: the families of Data\Buffs.lua (D.buffFamilies, fields described there), for Pylos Buffs.
 -- D.BuffFamilies(class file name) -> { [key] = family } of that class; shared tables, do not change

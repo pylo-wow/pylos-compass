@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 local ns = D.engine
 local L = ns.L
 
@@ -99,7 +98,7 @@ local function FoeWords(entry, yards, words)
 end
 function reach.NPC(entry)
     local yards = D.NPCDistance(entry)
-    local place = entry.place -- (Pylos Data: where it stands, nil if not known)
+    local place = entry.place -- where it stands, nil if not known
     if place then
         local minutes = D.TravelMinutes(place)
         if minutes ~= nil then
@@ -151,11 +150,11 @@ end
 
 -- Your trainer of a class (class ID) or profession (skill line) per D.npcTrainers: the nearest not hostile one; with
 -- no distance known, the one you use most (Memory.lua). Returns entry, factor, words; nil if none is known.
-local byTeaching -- class ID or skill line -> list of NPC IDs
+local teaching = D.Cache({ "npcs" }) -- rebuilt when trainers are learned in play
 function reach.Trainer(teaches)
     if not teaches then return nil end
-    if not byTeaching then
-        byTeaching = {}
+    local byTeaching, rebuilt = teaching.Get() -- class ID or skill line -> list of NPC IDs
+    if rebuilt then
         for npcID, what in pairs(D.npcTrainers or {}) do
             byTeaching[what] = byTeaching[what] or {}
             table.insert(byTeaching[what], npcID)

@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 local L = ns.L
 local D = ns.data
 
@@ -77,11 +76,16 @@ source = ns.RegisterSource({
             return { entry.tab, entry.rankNumber and L["Rank %d"]:format(entry.rankNumber) }
         end
         if entry.subtext == nil then
-            -- empty while the spell data is not loaded: asked again until there is a text
+            -- empty while the spell data is not loaded: asked again until there is a text; false once
+            -- the data is loaded and there is none
             local text = C_Spell.GetSpellSubtext and C_Spell.GetSpellSubtext(entry.spellID)
-            if text and text ~= "" then entry.subtext = text end
+            if text and text ~= "" then
+                entry.subtext = text
+            elseif C_Spell.IsSpellDataCached and C_Spell.IsSpellDataCached(entry.spellID) then
+                entry.subtext = false
+            end
         end
-        return { entry.tab, entry.subtext }
+        return { entry.tab, entry.subtext or nil }
     end,
     -- row state (UI\List.lua): learnable now or from which level; none for a learned spell (its hotkey shows there)
     state = function(entry)

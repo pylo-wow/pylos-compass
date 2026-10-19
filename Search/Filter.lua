@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 
 -- Filter machinery (the filters are in Filters\*.lua, registered with ns.RegisterFilter).
 -- Index.lua asks here before a search: which sources to search, which entries pass, whether a

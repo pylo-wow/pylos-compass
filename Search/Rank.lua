@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 
 -- Relevance of the typed search: candidates get points, the list is sorted by them.
 --   match    name fit: exact 400, start 300, a word's start 200, inside 100, category only 0.

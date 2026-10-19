@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- Builds the domains' entry lists and runs the one background queue all addons share.
 -- A built list is never mutated: a rebuild makes a new one, so a host's index made from the old list stays valid.
@@ -70,7 +69,11 @@ local function BuildDomain(domain, Pause)
         end
         if i % 64 == 0 then Pause() end
     end
-    if domain.generation ~= generation then return end
+    if domain.generation ~= generation then
+        -- a D.Need made while this stale job ran saw it as "waiting" and would never be built
+        if D.Needed(domain.key) then D.Rebuild(domain.key) end
+        return
+    end
     domain.list, domain.byItem, domain.byNPC, domain.byEntryID = entries, byItem, byNPC, byEntryID
     Changed(domain.key)
     D.Announce(domain.key, entries)
@@ -114,7 +117,8 @@ local function Start()
         builder = nil
         if not ok then
             -- log with the coroutine's own stack; only the failed job is dropped, the rest continue
-            geterrorhandler()(tostring(err) .. "\n" .. (debugstack and debugstack(co) or ""))
+            local _, stack = pcall(debugstack, co)
+            geterrorhandler()(tostring(err) .. "\n" .. (type(stack) == "string" and stack or ""))
             running = nil
             if #queue > 0 then Start() end
         end

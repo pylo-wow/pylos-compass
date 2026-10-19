@@ -1,9 +1,8 @@
 local ns = select(2, ...).search
-if ns.off then return end
 local L = ns.L
 
 -- An entry's tooltip: beside the list (ui.tip), or inside the detail view
--- (its own, Detail.lua). STYLEGUIDE.md section 8 (pylos-dev\shared).
+-- (its own, Detail.lua).
 
 local S = ns.state
 local W = ns.widgets

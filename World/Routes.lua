@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- Routes: minutes to get somewhere by the way you would really go. A route planner over the
 -- game's travel net and the walkable crossings between zones:

@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 local L = ns.L
 local D = ns.data
 
@@ -39,18 +38,6 @@ local function Scan()
         local kind, id, sub = GetActionInfo(slot)
         if kind == "macro" and id and sub == "spell" then
             kind = "spell" -- the client names the spell a macro button shows (id is the spell ID then)
-        elseif kind == "macro" and id then
-            local macro = id
-            local spellID = GetMacroSpell and GetMacroSpell(macro)
-            -- not "GetMacroItem and GetMacroItem(macro)": "and" keeps only the first result (the name)
-            local link
-            if GetMacroItem then link = select(2, GetMacroItem(macro)) end
-            local itemID = D.ItemIDFromLink(link)
-            if spellID then
-                kind, id = "spell", spellID
-            elseif itemID then
-                kind, id = "item", itemID
-            end
         end
         if kind == "spell" and id then
             local name = C_Spell.GetSpellName(id)

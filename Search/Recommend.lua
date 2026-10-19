@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 local L = ns.L
 
 -- Data's recommendation engine (service "engine") behind ns.rec. the search is a search, so

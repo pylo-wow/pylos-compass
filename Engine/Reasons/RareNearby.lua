@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 local ns = D.engine
 local L = ns.L
 
@@ -9,6 +8,7 @@ local L = ns.L
 
 local FRESH = 3 * 60 -- seconds a rare counts after it was seen
 local seen = {}      -- NPC ID -> time() it was seen last
+local MAX = 100      -- more than this many: the faded ones go
 
 local function Look(unit)
     if not unit or not UnitExists(unit) then return end
@@ -22,7 +22,15 @@ local function Look(unit)
         if not seen[npcID] then return end
         seen[npcID] = nil
     else
-        seen[npcID] = time()
+        local now = time()
+        seen[npcID] = now
+        local count = 0
+        for _ in pairs(seen) do count = count + 1 end
+        if count > MAX then
+            for id, at in pairs(seen) do
+                if now - at >= FRESH then seen[id] = nil end
+            end
+        end
     end
     D.BumpState("rec:rare")
 end

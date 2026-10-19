@@ -8,7 +8,7 @@ local addonName, D = ...
 
 PylosCompass = { API = 1, internal = D } -- Compass.lua fills it; Bindings.xml calls it; internal: the whole namespace, for Pylos Dev only
 
-local KIT = { L = true, db = true, off = true, kit = true, widgets = true, SetOption = true, minimapButton = true,
+local KIT = { L = true, db = true, kit = true, widgets = true, SetOption = true, minimapButton = true,
     SetAlert = true, GetColor = true, IsModifierHeld = true }
 
 local function Part(fallback)

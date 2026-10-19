@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 local ns = D.engine
 
 -- Learns whether the item valuer's upgrades are right for you, not from following within half an hour (most upgrades
@@ -64,6 +63,7 @@ local function Look()
     local judged = Judged()
     if not judged or InCombatLockdown() then return end
     D.RefreshOwned()
+    if next(watched) and not next(D.ownedItems) then return end -- an empty scan would read as "all gone"
     for itemID in pairs(watched) do
         if not D.bagItems[itemID] then
             if D.ownedItems[itemID] then
@@ -115,6 +115,7 @@ local WINDOWS = {
     MAIL_SHOW = { "elsewhere", true }, MAIL_CLOSED = { "elsewhere", false },
     TRADE_SHOW = { "elsewhere", true }, TRADE_CLOSED = { "elsewhere", false },
     AUCTION_HOUSE_SHOW = { "elsewhere", true }, AUCTION_HOUSE_CLOSED = { "elsewhere", false },
+    GUILDBANKFRAME_OPENED = { "elsewhere", true }, GUILDBANKFRAME_CLOSED = { "elsewhere", false },
 }
 for event in pairs(WINDOWS) do
     ns.On(event, function()

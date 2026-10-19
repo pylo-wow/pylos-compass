@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- Known flight points, learned at the flight master: C_TaxiMap.GetTaxiNodesForMap reports all nodes
 -- as known (confirmed in game), so use GetAllTaxiNodes(uiMapID) there: state 0 (current) and

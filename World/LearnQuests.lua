@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- Who gives and takes each quest, learned in play (the quest cache does not tell):
 --   offered (QUEST_DETAIL)  the NPC or object you talk to, or the item you used (named by the event)
@@ -77,7 +76,8 @@ local function NoteRepeats(questID, frequency)
     if q then q.repeats = D.QuestRepeats(questID) end
     return true
 end
-local function Listed()
+-- (the greeting API answers from the last QUEST_GREETING while a gossip window is up: each API only for its own event)
+local function Listed(event)
     if not (D.world and D.world.quests) or InCombatLockdown() then return end
     local kind, id = QuestPartner()
     if not kind then return end
@@ -91,17 +91,17 @@ local function Listed()
         if Secret(questID) or not questID or questID == 0 then return end
         if Note(questID, false, kind, id) then changed = true end
     end
-    if C_GossipInfo and C_GossipInfo.GetAvailableQuests then
+    if event == "GOSSIP_SHOW" and C_GossipInfo and C_GossipInfo.GetAvailableQuests then
         for _, info in ipairs(C_GossipInfo.GetAvailableQuests() or {}) do Offers(info.questID, info.frequency) end
         for _, info in ipairs(C_GossipInfo.GetActiveQuests() or {}) do Takes(info.questID) end
     end
-    if GetNumAvailableQuests and GetAvailableQuestInfo then
+    if event == "QUEST_GREETING" and GetNumAvailableQuests and GetAvailableQuestInfo then
         for i = 1, GetNumAvailableQuests() or 0 do
             local _, frequency, _, _, questID = GetAvailableQuestInfo(i)
             Offers(questID, frequency)
         end
     end
-    if GetNumActiveQuests and GetActiveQuestID then
+    if event == "QUEST_GREETING" and GetNumActiveQuests and GetActiveQuestID then
         for i = 1, GetNumActiveQuests() or 0 do Takes(GetActiveQuestID(i)) end
     end
     if changed then D.BumpState("npcs") end

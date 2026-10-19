@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 local L = ns.L
 
 -- Wowhead link: the game cannot open a browser, so the address is shown in a text field of the detail view,

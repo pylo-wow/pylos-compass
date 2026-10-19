@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 
 -- the search: search bar over your spells and all items, recipes, NPCs, dungeons and quests.
 -- Entries and facts come from Data; this addon searches and shows them.

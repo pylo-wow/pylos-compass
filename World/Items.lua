@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- Items: all game items (English names, Data\ItemNames_enUS.lua) with facts (Data\ItemFacts.lua)
 -- and GetItemInfoInstant data. Built in the background (19,224 entries).

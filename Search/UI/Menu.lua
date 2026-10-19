@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 local L = ns.L
 local D = ns.data
 
@@ -137,10 +136,6 @@ function ui.ShowMenu(entry, fromDetail, byKey)
                 chat.InsertLink(link)
             elseif chat and chat.OpenChat then
                 chat.OpenChat(link)
-            elseif ChatEdit_GetActiveWindow and ChatEdit_GetActiveWindow() then
-                ChatEdit_InsertLink(link) -- the old names, removed with the next expansion
-            elseif ChatFrame_OpenChat then
-                ChatFrame_OpenChat(link)
             end
         end, icon = SYMBOLS.chat }
     end

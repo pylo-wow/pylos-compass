@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- World events (Data\Events.lua): which NPCs and quests only exist during one, and whether it runs now.
 --   D.EventOf(entry)    event key of an NPC or quest, nil if none
@@ -95,7 +94,12 @@ local function ReadCalendar()
 end
 
 D.OnLoaded(function() D.world.eventsSeen = D.world.eventsSeen or {} end)
+local openedOn -- the calendar day the calendar was opened for; zone and instance loads do not open it again
 D.On("PLAYER_ENTERING_WORLD", function()
+    local now = C_DateAndTime and C_DateAndTime.GetCurrentCalendarTime and C_DateAndTime.GetCurrentCalendarTime()
+    local day = now and (now.year * 10000 + now.month * 100 + now.monthDay)
+    if day and day == openedOn then return end
+    openedOn = day
     if C_Calendar and C_Calendar.OpenCalendar then pcall(C_Calendar.OpenCalendar) end
     ReadCalendar()
 end)

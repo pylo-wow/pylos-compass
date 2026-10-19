@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 local D = ns.data
 local L = ns.L
 

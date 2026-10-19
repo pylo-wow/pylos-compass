@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- Data: the game's data and what follows from it, for other addons. Facts only: no weighing, no interface.
 -- Folders: Core\ (frame, domains, entries, IDs, events, maps, state, background builder, saved data),

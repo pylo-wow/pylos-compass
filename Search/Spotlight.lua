@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 local L = ns.L
 
 -- Open/close, events and options.
@@ -71,7 +70,7 @@ function ns.BackgroundAlpha() return (ns.db and ns.db.backgroundAlpha or BACKGRO
 ns.ButtonClicked = ButtonClicked
 
 local function MouseOverSearch()
-    local focus = GetMouseFoci and GetMouseFoci()[1] or (GetMouseFocus and GetMouseFocus())
+    local focus = GetMouseFoci()[1]
     while focus do
         if focus == ui.bar then return true end
         focus = focus.GetParent and focus:GetParent()

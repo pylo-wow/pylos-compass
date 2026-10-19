@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 local D = ns.data
 
 -- Rows of a link's list (Links\*.lua): an item or NPC with the entry behind it (target: a click opens

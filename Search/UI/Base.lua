@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 
 -- Frames, drawing and animation, in the files of UI\ (loaded in this order):
 --   Base.lua      shared: tooltip, opening order, building blocks, the bar's frame, hovering
@@ -13,7 +12,7 @@ if ns.off then return end
 --   Bar.lua       the bar's contents (RenderBar), opening and closing
 -- They draw ns.state; what the clicks do is in View.lua. What a file gives the others is a field of ns.ui.
 -- Animations run on the driver of UI\Kit\Widgets.lua (W.Tween, W.Follow): nothing runs per frame while
--- nothing moves. Times and curves: STYLEGUIDE.md section 10 (pylos-dev\shared).
+-- nothing moves. Times and curves are the shared widgets' (W.Tween).
 
 local W = ns.widgets
 local ui = {}

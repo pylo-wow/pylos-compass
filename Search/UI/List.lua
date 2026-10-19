@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 local L = ns.L
 local D = ns.data
 
@@ -52,7 +51,7 @@ end
 -- A row: icon, name and a grey line of details on the left; state for you and the reason on the right; the icon
 -- shows the count you carry (from 2) and the quality frame. A heading (entry.header) is a narrow gap with its label.
 local HEADER_HEIGHT = 22
-local HEADING = { 0.75, 0.68, 0.52 } -- a heading's label in the list (STYLEGUIDE.md: heading)
+local HEADING = { 0.75, 0.68, 0.52 } -- a heading's label in the list
 local NAME_X = W.NAME_X
 
 local function HoverRow(row)
@@ -253,8 +252,7 @@ local seen = {} -- entries of the current results shown already
 -- (a recipe's skill colour). The symbol is grey where the tone is done or no.
 local TONES = ns.TONES
 -- a recipe item of no use right now in a link's list (D.RecipeState); items' own rows: Sources\Items.lua
-local RECIPE_STATES = { known = { L["Already known"], "done" }, profession = { L["Profession not learned"], "no" },
-    specialization = { L["Other specialization"], "no" }, skill = { L["Skill too low"], "no" } }
+local RECIPE_STATES = ns.RECIPE_STATES
 local function StateOf(entry)
     local real = Real(entry)
     if real.source and real.source.state then return real.source.state(real) end

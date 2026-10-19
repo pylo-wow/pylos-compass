@@ -1,17 +1,16 @@
 local ns = select(2, ...).advice
-if ns.off then return end
 local D = ns.data
 local L = ns.L
 local W = ns.widgets -- shared with the search window
 
--- Suggestions window (minimap left click or /prec), built from the widgets shared with the search (Widgets.lua).
+-- Suggestions window (minimap middle click or key), built from the widgets shared with the search (Widgets.lua).
 --   tabs: one per topic (Reasons.lua), always one set (no all-in-one list: what is important now comes as a nudge, Push.lua). Each counts its suggestions; empty ones are dimmed; close tab at the right end.
 --   subtopics: side tabs (Subtopics.lua, W.SideTabs); the set one narrows the list, clicking it again clears it.
 --   list: best first (ns.RelevantByTopic); row = icon, name, category, strongest reason's note (text, or symbol with count). Hover shows the game's tooltip with every reason beside the window.
 --   click: uses/equips an item, casts a spell, opens a recipe's profession window (secure: left click, out of combat), sets a waypoint, or (Quests tab) opens the quest in the quest log.
 --   right click: the search's menu (quest log, search, waypoint, good/bad/don't suggest).
 -- Draggable (rows too), anchored at its top left so a shorter list shrinks upwards. Updates on open and soon after changes (events, no timer), not while the mouse is over it.
--- Animation as the search's (STYLEGUIDE); rows do not slide in (they change on each update). Closes before combat: secure buttons cannot change in combat.
+-- Animation as the search's; rows do not slide in (they change on each update). Closes before combat: secure buttons cannot change in combat.
 
 local ROWS = 10
 local ALL = 999           -- a topic's list in full (its tab counts it)
@@ -78,7 +77,7 @@ local function Action(entry)
     local itemID = entry.itemID
     if itemID and C_Item.GetItemCount(itemID) > 0 then
         if entry.itemClass == 2 or entry.itemClass == 4 then return "item", "item:" .. itemID, L["Click: put it on"] end
-        local GetSpell = C_Item.GetItemSpell or GetItemSpell
+        local GetSpell = C_Item.GetItemSpell
         if entry.itemClass == 9 or (GetSpell and GetSpell(itemID)) then return "item", "item:" .. itemID, L["Click: use it"] end
     end
     if entry.domain == "spells" and not entry.hidden and entry.spellID and not D.SpellPassive(entry.spellID) then
@@ -672,8 +671,16 @@ function ns.ToggleWindow()
         W.Error(L["The recommendations open after combat."])
         return
     end
-    if window and not window.Open then window = nil end -- a window that failed half way through Build: build it again
-    window = window or Build()
+    if not window then
+        -- Build assigns the shared upvalue early (its helpers use it): a failed build must not stay
+        local ok, err = pcall(Build)
+        if not ok then
+            if window then window:Hide() end
+            window = nil
+            geterrorhandler()(err)
+            return
+        end
+    end
     if window:IsShown() and not window.closingAt then window.Close() else window.Open() end
 end
 

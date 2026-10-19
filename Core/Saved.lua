@@ -1,5 +1,4 @@
 local addonName, D = ...
-if D.off then return end
 
 -- PylosCompassWorldDB: everything learned in the game, kept only on your computer.
 --   met           zone an NPC was met in (World\LearnNPCs.lua)
@@ -16,32 +15,32 @@ if D.off then return end
 local loaded = {} -- functions to call once PylosCompassWorldDB is set up
 function D.OnLoaded(fn) loaded[#loaded + 1] = fn end
 
-D.On("ADDON_LOADED", function(_, name)
-    if name ~= addonName or D.world then return end
-    PylosCompassWorldDB = PylosCompassWorldDB or {}
-    local db = PylosCompassWorldDB
-    db.version = db.version or 1
-    db.met = db.met or {}
-    db.vendorPrices = db.vendorPrices or {}
-    for _, key in ipairs({ "items", "vendors", "reactions", "pending" }) do
-        db.vendorPrices[key] = db.vendorPrices[key] or {}
-    end
+-- shape 1: the clean-ups of the first saved data (also runs once on data from before shapes were counted)
+local function Migrate1(db)
     -- obsolete: prices now come without discount from Data\ItemPrices.lua
     db.prices = nil
-    db.npcs = db.npcs or {}
-    db.quests = db.quests or {}
-    db.training = db.training or {}
-    db.dungeons = db.dungeons or {}
-    db.taxi = db.taxi or {}
-    db.travel = db.travel or {}
-    db.travel.chars = db.travel.chars or {}
-    -- "seen" was never read: drop it, also from older saved data
+    db.version = nil
+    -- "seen" was never read: drop it
     for _, list in ipairs({ db.npcs, db.quests }) do
-        for _, learned in pairs(list) do
-            if type(learned) == "table" then learned.seen = nil end
+        if type(list) == "table" then
+            for _, learned in pairs(list) do
+                if type(learned) == "table" then learned.seen = nil end
+            end
         end
     end
-    db.crossings = db.crossings or {}
+end
+
+D.On("ADDON_LOADED", function(_, name)
+    if name ~= addonName or D.world then return end
+    local db = D.kit.Saved("PylosCompassWorldDB", { version = 1, migrations = { [1] = Migrate1 } })
+    -- a missing or wrong-typed table is replaced, so the learners can rely on them
+    local function Table(parent, key)
+        if type(parent[key]) ~= "table" then parent[key] = {} end
+        return parent[key]
+    end
+    for _, key in ipairs({ "met", "npcs", "quests", "training", "dungeons", "taxi", "crossings" }) do Table(db, key) end
+    for _, key in ipairs({ "items", "vendors", "reactions", "pending" }) do Table(Table(db, "vendorPrices"), key) end
+    Table(Table(db, "travel"), "chars")
     D.SeedSeen(db)
     D.world = db
     -- one failing learner does not keep the others from starting
@@ -55,7 +54,7 @@ end)
 -- At load its facts missing from your saved data are copied in, so readers and learners use one table;
 -- at logout unchanged copies are removed again (your file keeps only what you saw yourself).
 local SEEN_LISTS = { "npcs", "met", "quests", "training", "dungeons", "crossings" }
-local copies = {} -- list -> key -> the copy's text as put in
+local copies = {} -- list -> key -> the shipped value the copy was made from (never changed)
 
 local function Copy(value)
     if type(value) ~= "table" then return value end
@@ -64,14 +63,15 @@ local function Copy(value)
     return copy
 end
 
--- a value as text, its keys sorted (to tell a copy changed)
-local function Text(value)
-    if type(value) ~= "table" then return tostring(value) end
-    local keys = {}
-    for k in pairs(value) do keys[#keys + 1] = k end
-    table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
-    for i, k in ipairs(keys) do keys[i] = tostring(k) .. "=" .. Text(value[k]) end
-    return "{" .. table.concat(keys, ",") .. "}"
+local function Same(a, b)
+    if type(a) ~= "table" or type(b) ~= "table" then return a == b end
+    for k, v in pairs(a) do
+        if not Same(v, b[k]) then return false end
+    end
+    for k in pairs(b) do
+        if a[k] == nil then return false end
+    end
+    return true
 end
 
 function D.SeedSeen(db)
@@ -84,7 +84,7 @@ function D.SeedSeen(db)
             for key, value in pairs(theirs) do
                 if mine[key] == nil then
                     mine[key] = Copy(value)
-                    put[key] = Text(value)
+                    put[key] = value
                 end
             end
             copies[name] = put
@@ -98,8 +98,8 @@ D.On("PLAYER_LOGOUT", function()
     if not db then return end
     for name, put in pairs(copies) do
         local mine = db[name]
-        for key, text in pairs(put) do
-            if mine[key] ~= nil and Text(mine[key]) == text then mine[key] = nil end
+        for key, shipped in pairs(put) do
+            if mine[key] ~= nil and Same(mine[key], shipped) then mine[key] = nil end
         end
     end
 end)

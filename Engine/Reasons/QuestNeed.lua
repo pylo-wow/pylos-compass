@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 local ns = D.engine
 local L = ns.L
 
@@ -23,7 +22,7 @@ local questOfTitle = {} -- quest title -> quest ID, of your log
 local open = {} -- quest ID -> list of { kind, text }: its open objectives
 local itemOfKey = {} -- name key -> item ID, of the items to collect
 local dirty = true -- read again (also while the items or NPCs are not built yet)
-local readAt -- the state "quests" (Pylos Data, Core\State.lua) it was read at
+local readAt -- the state "quests" it was read at
 
 local EachQuest = D.EachLoggedQuest
 

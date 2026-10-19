@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- Places, maps and small shared helpers.
 --   D.Place(mapID, x, y)    uiMapID * 1000000 + x * 1000 + y, x and y the map's 0..1 in thousandths; nil off the map

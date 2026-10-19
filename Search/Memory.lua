@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-if ns.off then return end
 
 -- The search's memory: what you chose after typing what (PylosCompassDB.learned); Rank.lua
 -- scores it. learned: text -> entry ID -> { value, time, exact }. The text is each prefix of what
@@ -131,6 +130,8 @@ end
 
 -- at most this many entries under a text (and under "", which counts every choice): the strongest stay
 local MAX_PER_TEXT, MAX_FOR_ALL = 40, 1500
+-- and at most this many texts, the weakest go (a choice writes up to 12 prefix buckets)
+local MAX_TEXTS = 4000
 
 function memory.Prune()
     local db = DB()

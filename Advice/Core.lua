@@ -1,5 +1,4 @@
 local addonName, ns = ...; ns = ns.advice
-if ns.off then return end
 
 -- Recommendations window with tabs plus nudges, on the engine in Engine\.
 -- Files: Core (options), Subtopics + Window (window), Push/Pushes/Toast (nudges).

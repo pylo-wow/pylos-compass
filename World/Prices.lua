@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- Vendor prices without any discount (a reputation discount would skew everything).
 -- Base: the neutral-standing price for one, from Data\ItemPrices.lua (ItemSparse BuyPrice /

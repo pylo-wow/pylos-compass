@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- Tooltip lines, icons and categories for NPCs, quests and dungeons (entry.lines, entry.icon,
 -- entry.category; quests also entry.iconPart and entry.iconColor), so every host shows the same.

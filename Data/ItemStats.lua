@@ -4,12 +4,12 @@ local _, ns = ...
 -- DB2 tables ItemSparse, Item, RandPropPoints, ItemArmorQuality/Total/Shield, ArmorLocation,
 -- ItemDamage*, ItemEffect, ItemXItemEffect, SpellEffect (wago.tools, build 1.60.1.70450),
 -- ItemSparse and Item with the client's hotfixes (Cache\ADB\enUS\DBCache.bin): 4701 hotfix items,
--- their effects (flag p) from Pylos DataGrabber's tooltips where it read them,
--- plus 15 items ItemSparse lacks with what the game gave Pylos DataGrabber. Do not edit.
+-- their effects (flag p) from the data collection's tooltips where it read them,
+-- plus 15 items ItemSparse lacks with what the game gave the data collection. Do not edit.
 -- The stats of every item of ItemNames_enUS.lua that can be worn (not bags,
--- ammunition, quivers), read by World\ItemStats.lua (D.ItemStats):
+-- ammunition, quivers), read by the valuer's ItemStats.lua (D.ItemStats):
 -- item ID -> "stats|weapon|flags" (empty parts at the end left out)
---   stats   KEY=amount,... with the keys of World\ItemStats.lua; ratings in percent
+--   stats   KEY=amount,... with the keys of the valuer's ItemStats.lua; ratings in percent
 --           points at level 60 (HIT=1: +1% to hit); ARMOR = base + bonus armour
 --   weapon  speed in ms:min damage:max damage
 --   flags   p = an equip or chance-on-hit effect the stats do not show,

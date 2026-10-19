@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- Calls take(questID, title, index) for each logged quest, headers skipped. Prefers C_QuestLog;
 -- the old globals are a fallback (questID is then -index where they give none).

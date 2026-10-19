@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 local ns = D.engine
 local L = ns.L
 
@@ -12,19 +11,16 @@ local FRESH = 15 * 60 -- seconds an item counts as new
 local STARTS_QUEST = 1.5 -- an item that starts a quest: this much stronger
 local fresh = {}      -- item ID -> time() it came (this session)
 
-local function Seen()
+local function Look()
     local db = ns.db
-    if not db then return nil end
+    if not db then return end
+    D.RefreshOwned()
+    -- an empty scan must not become the character's "first look" (every item would count as new next time)
+    if not next(D.ownedItems) then return end
     local key = ns.Character()
     local first = db.seenItems[key] == nil
-    db.seenItems[key] = db.seenItems[key] or {}
-    return db.seenItems[key], first
-end
-
-local function Look()
-    local seen, first = Seen()
-    if not seen then return end
-    D.RefreshOwned()
+    local seen = db.seenItems[key] or {}
+    db.seenItems[key] = seen
     local now = time()
     for itemID in pairs(D.ownedItems) do
         if not seen[itemID] then

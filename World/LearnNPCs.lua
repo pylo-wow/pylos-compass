@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- NPCs as Forever has them, learned in play: the data files hold the 1.12 data (vmangos), but
 -- Forever moved, changed and added NPCs. What the game shows is stored in PylosCompassWorldDB and
@@ -104,9 +103,9 @@ end
 
 local function ApplyDrops(npcID, learned)
     if (learned.loots or 0) < MIN_LOOTS or not learned.drops then return end
+    local old = {} -- itemID -> chance as listed now
     for _, part in ipairs(Split(D.npcDrops[npcID], {})) do
-        local itemID = tonumber(part:match("^(%d+)"))
-        D.itemDroppedBy[itemID] = Without(D.itemDroppedBy[itemID], npcID)
+        old[tonumber(part:match("^(%d+)"))] = part:match(":(%d+)")
     end
     local seen = {}
     for itemID, times in pairs(learned.drops) do
@@ -115,12 +114,23 @@ local function ApplyDrops(npcID, learned)
         end
     end
     table.sort(seen, function(a, b) return a[2] > b[2] or (a[2] == b[2] and a[1] < b[1]) end)
-    local parts = {}
+    local parts, changed = {}, false
     for i, item in ipairs(seen) do
-        parts[i] = item[1] .. ":" .. item[2]
-        local list = D.itemDroppedBy[item[1]]
-        D.itemDroppedBy[item[1]] = SortDrops((list and (list .. ",") or "") .. npcID .. ":" .. item[2])
+        local itemID, chance = item[1], tostring(item[2])
+        parts[i] = itemID .. ":" .. chance
+        -- only lists whose entry for this NPC differs are rewritten (and sorted again)
+        if old[itemID] ~= chance then
+            local list = Without(D.itemDroppedBy[itemID], npcID)
+            D.itemDroppedBy[itemID] = SortDrops((list and (list .. ",") or "") .. npcID .. ":" .. chance)
+            changed = true
+        end
+        old[itemID] = nil
     end
+    for itemID in pairs(old) do -- no longer listed
+        D.itemDroppedBy[itemID] = Without(D.itemDroppedBy[itemID], npcID)
+        changed = true
+    end
+    if not changed then return end
     D.npcDrops[npcID] = #parts > 0 and table.concat(parts, ",") or nil
     D.BumpState("drops")
 end

@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 local ns = D.engine
 
 -- Learns which reasons you follow, only from signs you give: what you told, chose or did. Not from ignored suggestions

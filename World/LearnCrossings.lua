@@ -1,5 +1,4 @@
 local _, D = ...
-if D.off then return end
 
 -- Zone crossings learned while walking; Data\Paths.lua misses some and the route planner
 -- (World\Routes.lua) enters another zone only through a crossing. Every EVERY seconds the
