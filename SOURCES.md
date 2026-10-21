@@ -25,15 +25,18 @@ SpellReagents, SpellLevels, SpellName, SpellMisc, SpellDuration, SkillLine,
 SkillLineAbility, SkillRaceClassInfo, TraitDefinition, Map, MapDifficulty,
 Difficulty, GroupFinderActivity, DungeonEncounter, AreaTrigger, AreaTable,
 UiMap, UiMapAssignment, UiMapXMapArt, WorldMapOverlay, TaxiNodes, TaxiPath,
-TaxiPathNode, QuestXP, QuestFactionReward, QuestSort, ChrClasses, Lock.
+TaxiPathNode, TransportAnimation, QuestXP, QuestFactionReward, QuestSort,
+ChrClasses, Faction, FactionTemplate, Holidays, Lock.
 Files: ItemNames_enUS, ItemFacts, ItemStats, ClassSpells,
 ProfessionSpells, OtherRecipes, Dungeons_enUS, NPCPlaces, TravelNet,
 QuestFacts, Gathering (Lock: the skill a node needs; UiMap and
-UiMapAssignment: the nodes' zones), ItemPrices (with the client's hotfix rows
-of ItemSparse, `Cache\ADB\enUS\DBCache.bin`).
+UiMapAssignment: the nodes' zones), Events (Holidays: the calendar's names),
+NPCFacts (Faction, FactionTemplate). ItemNames_enUS, ItemFacts, ItemStats and
+ItemPrices also use the client's hotfix rows of ItemSparse
+(`Cache\ADB\enUS\DBCache.bin`).
 
 The client's caches of the server's answers (`Cache\WDB\enUS\creaturecache.wdb`,
-`questcache.wdb`, build 70291) and what the game answered the author's private
+build 70450; `questcache.wdb`, build 70291) and what the game answered the author's private
 collecting tool (NPC names and titles, item facts and stats of items the
 tables lack): NPCNames_enUS, NPCFacts, QuestNames_enUS, QuestFacts,
 ItemNames_enUS, ItemFacts, ItemStats.
@@ -51,7 +54,10 @@ gameobject_template, gameobject, gameobject_loot_template, item_template),
 and which NPCs and quests come
 only with a world event such as Feast of Winter Veil (Events: game_event,
 game_event_creature, game_event_quest; whether an event runs comes from
-the game's calendar or its NPCs seen). Used only where the game
+the game's calendar or its NPCs seen), which flight paths connect
+(TravelNet: taxi_path_transitions, gameobject, gameobject_template,
+transports) and which trainers teach a recipe that needs a specialization
+(ProfessionSpells: npc_trainer). Used only where the game
 itself does not tell; what is seen in play replaces it (below). Where a
 level, role, zone, dungeon entrance, drop, ware, quest giver or taker is
 still the 1.12 data's, the addon marks it "unchecked".
@@ -82,12 +88,12 @@ version. Thanks to the Carbonite authors.
 
 ## WhatsTraining (class trainers)
 
-`ns.trainCosts` in `Data\ClassSpells.lua`, the class trainers' spells and
+`D.trainCosts` in `Data\ClassSpells.lua`, the class trainers' spells and
 their cost, are taken from [WhatsTraining](https://www.curseforge.com/wow/addons/whatstraining)
-11.0.0-beta15 (`Classes/Camelot/*.lua`) by Sveng (its TOC's author; the
+11.0.0-beta21 (`Classes/Camelot/*.lua`) by Sveng (its TOC's author; the
 copyright line of its LICENSE names no one), MIT License. The list also
 tells which spells Forever's trainers teach before a trainer was seen.
-Thanks to its authors. Its licence, as its `LICENSE` file gives it:
+Thanks to its authors. Its license, as its `LICENSE` file gives it:
 
 ```
 MIT License
@@ -147,6 +153,9 @@ for this addon from the classic formulas (no other addon's scales).
   (`Leatrix_Plus_Flight_Alliance/Horde.lua`), 185 direct flights.
 - Ship speed (rough): checked against the round trips of
   [Nauticus](https://github.com/droolio/Nauticus) (`data.lua`).
+- Ride times of boats and zeppelins (`Data\TravelNet.lua`): computed with the
+  path model of TrinityCore's `TransportMgr::GeneratePath` (no code copied)
+  and checked against vmangos' `transports.period`.
 - Hit caps of the item valuer (`Engine\ItemValue\Value.lua`: 5 % and 4 % against
   equal-level foes, 8 % and 17 % against raid bosses, 19 % more for melee
   with a weapon in the off hand): the client's own hit cap texts
@@ -166,8 +175,9 @@ and takers and daily or weekly quests, also from an NPC's quest list
 skill and cost (`World\LearnTrainers.lua`), crossings between zones walked
 (`World\LearnCrossings.lua`), vendors' prices where the data is wrong and
 each vendor's discount (`World\Prices.lua`), dungeon
-entrances (`World\Dungeons.lua`), your flight points (`You\Taxi.lua`), your
-hearthstone and mount speed (`You\Hearth.lua`). Nothing is sent anywhere.
+entrances (`World\Dungeons.lua`), which world events run (`World\Events.lua`),
+your flight points (`You\Taxi.lua`), your hearthstone and mount speed
+(`You\Hearth.lua`). Nothing is sent anywhere.
 
 `Data\Seen.lua` is the same kind of knowledge, seen while the author played
 WoW Forever, shipped with the addon: it counts as seen for everyone, before

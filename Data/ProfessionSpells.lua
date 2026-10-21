@@ -491,7 +491,7 @@ D.recipeLearnRanks = {
 -- the specialisation a recipe needs: spell ID -> the specialisation's spell (Gnomish
 -- Engineer 20219, Armorsmith 9788, ...; several: any of them). From the recipe item
 -- (ItemSparse.RequiredAbility), for a trainer's recipe from the 1.12 trainers (vmangos
--- npc_trainer: only specialisation trainers teach it, fixes\recipe_specialization_trainers.tsv)
+-- npc_trainer: only specialisation trainers teach it)
 D.recipeSpecializations = {
 [9954]=9788,[9974]=9788,[10003]=9787,[10007]=9787,[10011]=9787,[10015]=9787,[10619]=10656,[10621]=10660,[10630]=10658,[10632]=10658,
 [10647]=10660,[10650]=10656,[12715]=20222,[12718]=20222,[12760]=20222,[12755]=20222,[12754]=20222,[12759]=20219,[12758]=20222,[12895]={20219,20222},

@@ -6,7 +6,7 @@ local _, D = ...
 -- UiMapAssignment, UiMapXMapArt, WorldMapOverlay, AreaTable (wago.tools, build 1.60.1.70450) and the
 -- vmangos world database (1.12 data, db_latest 2026-09-28). Do not edit.
 -- Every NPC's English name (ID -> name), and the English titles where the
--- NPC has one. Clients other than German take their names from here.
+-- NPC has one.
 -- Left out (in all NPC files): NPCs whose English name marks them as
 -- internal, test or placeholder ([DNT], [UNUSED], [PH], Invisible, Test,
 -- Placeholder, Kill Credit, Bunny, Trigger, ...), test NPCs ("World ...",

@@ -209,8 +209,8 @@ D.classSkillLines = {
 }
 
 -- The class trainers' spells and their cost without discount, in copper:
--- pairs spell ID, copper. From WhatsTraining 11.0.0-beta21 (MIT License,
--- Copyright (c) 2019 Sveng; Classes\Camelot\*.lua, wt.SpellsByLevel), the
+-- pairs spell ID, copper. From WhatsTraining 11.0.0-beta21 (MIT License, by Sveng;
+-- Classes\Camelot\*.lua, wt.SpellsByLevel), the
 -- list of what Forever's trainers teach. Thanks to its authors.
 D.trainCosts = {
 1126,10,8921,100,774,100,467,100,5177,100,339,200,5186,200,99,300,5232,300,8924,300,

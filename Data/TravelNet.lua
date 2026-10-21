@@ -28,7 +28,7 @@ local _, D = ...
 -- transport docking only once is left out (path 436, Naxxramas). A transport
 -- whose every stop is a dock of a newer one (higher path ID) is left out: path 295 (its docks are path 11167's);
 -- WoW Forever sails path 11167 via Southshore from the same docks, no ship of
--- path 295 was seen in Forever (the audit of 2026-10-08).
+-- path 295 was seen in Forever.
 -- Ride times: the server's path model (TrinityCore's TransportMgr::GeneratePath,
 -- as the 1.12 servers move transports) on these waypoints: 30 yd/s, speeding up and
 -- braking at 1 yd/s^2 around each stop (moveSpeed and accelRate of every

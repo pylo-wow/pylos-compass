@@ -15,8 +15,8 @@ local _, D = ...
 -- Levels: the 10th to 90th percentile of the mobs' levels, weighted by how
 -- often each mob is placed in the world; bosses left out (elites and rares
 -- count). Skinning from at least 3 mobs goes before drops (at least 5 mobs),
--- skinning from fewer only without drops. Only items in Pylos
--- Data's item list (Forever's items). Made from the vmangos world
+-- skinning from fewer only without drops. Only items in Forever's
+-- item list. Made from the vmangos world
 -- database (1.12 data, GitHub release db_latest 2026-09-28: creature
 -- templates, loot and skinning templates, game object templates and
 -- spawns) and the client's Lock, UiMap and UiMapAssignment tables
