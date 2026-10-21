@@ -12,7 +12,8 @@ local _, D = ...
 --   a vendor's window  what it really sells
 --   pointing at one    level, reaction, rank and type (target, mouseover, name plates; not in
 --                      combat or instances: unit values can be secret there)
---   looting one        drops, used once looted MIN_LOOTS times
+--   looting one        drops: from MIN_LOOTS corpses the chances seen replace the 1.12 ones, from
+--                      MIN_LOOTS_REMOVE corpses a rare 1.12 drop that never fell is dropped
 -- PylosCompassWorldDB.npcs[npcID] = { place = uiMapID * 1000000 + x * 1000 + y,
 --   roles = bits seen (D.NPC_ROLE), noRepair = true (vendor seen without repairing),
 --   levelMin, levelMax, rank (entry.npcRank), type (entry.creatureType),
@@ -24,7 +25,10 @@ local _, D = ...
 -- Quest givers/takers: LearnQuests.lua; dungeon entrances: Dungeons.lua.
 
 local Secret = D.Secret
-local MIN_LOOTS = 10 -- corpses looted before the drops seen replace the 1.12 ones
+local MIN_LOOTS = 10 -- corpses looted before the chances seen replace the 1.12 ones
+local MIN_LOOTS_REMOVE = 100 -- corpses looted before a 1.12 drop that never fell may be removed ...
+local REMOVE_BELOW = 20 -- ... if its 1.12 chance is under this many percent (a few corpses prove nothing about rare drops)
+local unverified = {} -- NPC ID -> true: its drop list still holds 1.12 drops that were not seen
 local ROLE = D.NPC_ROLE
 local RANKS = { elite = 1, rareelite = 2, worldboss = 3, rare = 4, normal = 0, trivial = 0, minus = 0 }
 -- UnitCreatureType answers in the client's language: English names plus the client's own
@@ -100,37 +104,49 @@ local function SortDrops(text)
     return #parts > 0 and table.concat(parts, ",") or nil
 end
 
+-- The chances of the items seen replace the listed ones; a listed drop that was not seen stays, except a rare one
+-- (REMOVE_BELOW) once MIN_LOOTS_REMOVE corpses were looted.
 local function ApplyDrops(npcID, learned)
-    if (learned.loots or 0) < MIN_LOOTS or not learned.drops then return end
-    local old = {} -- itemID -> chance as listed now
+    local loots = learned.loots or 0
+    if loots < MIN_LOOTS or not learned.drops then return end
+    local listed = {} -- itemID -> the part of the list as it is now ("itemID:chance")
     for _, part in ipairs(Split(D.npcDrops[npcID], {})) do
-        old[tonumber(part:match("^(%d+)"))] = part:match(":(%d+)")
+        listed[tonumber(part:match("^(%d+)"))] = part
     end
-    local seen = {}
+    local entries, seen, changed = {}, {}, false -- { itemID, chance, part }
     for itemID, times in pairs(learned.drops) do
         if D.itemNamesEN[itemID] then
-            seen[#seen + 1] = { itemID, math.floor(times / learned.loots * 100 + 0.5) }
+            local chance = math.floor(times / loots * 100 + 0.5)
+            seen[itemID] = true
+            entries[#entries + 1] = { itemID, chance, itemID .. ":" .. chance }
+            -- only lists whose entry for this NPC differs are rewritten (and sorted again)
+            if listed[itemID] ~= itemID .. ":" .. chance then
+                local list = Without(D.itemDroppedBy[itemID], npcID)
+                D.itemDroppedBy[itemID] = SortDrops((list and (list .. ",") or "") .. npcID .. ":" .. chance)
+                changed = true
+            end
         end
     end
-    table.sort(seen, function(a, b) return a[2] > b[2] or (a[2] == b[2] and a[1] < b[1]) end)
-    local parts, changed = {}, false
-    for i, item in ipairs(seen) do
-        local itemID, chance = item[1], tostring(item[2])
-        parts[i] = itemID .. ":" .. chance
-        -- only lists whose entry for this NPC differs are rewritten (and sorted again)
-        if old[itemID] ~= chance then
-            local list = Without(D.itemDroppedBy[itemID], npcID)
-            D.itemDroppedBy[itemID] = SortDrops((list and (list .. ",") or "") .. npcID .. ":" .. chance)
-            changed = true
+    local kept = false
+    for itemID, part in pairs(listed) do -- in the old list only: not seen dropping
+        if not seen[itemID] then
+            local chance = tonumber(part:match(":(%d+)")) or 0
+            if loots >= MIN_LOOTS_REMOVE and chance < REMOVE_BELOW then
+                D.itemDroppedBy[itemID] = Without(D.itemDroppedBy[itemID], npcID)
+                changed = true
+            else
+                entries[#entries + 1] = { itemID, chance, part }
+                kept = true
+            end
         end
-        old[itemID] = nil
     end
-    for itemID in pairs(old) do -- in the old list only: not seen dropping
-        D.itemDroppedBy[itemID] = Without(D.itemDroppedBy[itemID], npcID)
-        changed = true
-    end
+    unverified[npcID] = kept and loots < MIN_LOOTS_REMOVE or nil
+    table.sort(entries, function(a, b) return a[2] > b[2] or (a[2] == b[2] and a[1] < b[1]) end)
+    for i, entry in ipairs(entries) do entries[i] = entry[3] end
+    local text = #entries > 0 and table.concat(entries, ",") or nil
+    if text ~= D.npcDrops[npcID] then changed = true end
     if not changed then return end
-    D.npcDrops[npcID] = #parts > 0 and table.concat(parts, ",") or nil
+    D.npcDrops[npcID] = text
     D.BumpState("drops")
 end
 
@@ -155,7 +171,9 @@ local ORIGIN = {
         return D.npcPlaces[entry.npcID] and "1.12" or nil
     end,
     drops = function(entry, learned)
-        if learned and (learned.loots or 0) >= MIN_LOOTS and learned.drops then return "seen" end
+        if learned and (learned.loots or 0) >= MIN_LOOTS and learned.drops and not unverified[entry.npcID] then
+            return "seen"
+        end
         return D.npcDrops[entry.npcID] and "1.12" or nil
     end,
     sells = function(entry, learned)
@@ -384,13 +402,29 @@ D.On("NAME_PLATE_UNIT_ADDED", function(_, unit) Seen(unit) end)
 D.On("PLAYER_TARGET_CHANGED", function() Seen("target") end)
 D.On("UPDATE_MOUSEOVER_UNIT", function() Seen("mouseover") end)
 
+-- Pick Pocket and Skinning open a loot window that is no corpse's drops: the pickpocket's source is a living NPC
+-- (its corpse is counted when it is looted), and a skinned corpse may never have been looted by you. The window
+-- right after such a cast is not counted. Spells: Pick Pocket (ClassSpells.lua) and every spell of the Skinning
+-- skill line (ProfessionSpells.lua).
+local PICK_POCKET, SKINNING_LINE, NOT_DROPS_FOR = 921, 393, 2 -- the last: seconds
+local notDrops = { [PICK_POCKET] = true }
+local skinning = D.professionSpells and D.professionSpells[SKINNING_LINE] or {}
+for i = 1, #skinning, 5 do notDrops[skinning[i]] = true end
+local notDropsUntil = 0
+D.On("UNIT_SPELLCAST_SUCCEEDED", function(_, _, _, spellID)
+    if spellID and not Secret(spellID) and notDrops[spellID] then notDropsUntil = GetTime() + NOT_DROPS_FOR end
+end)
+
 -- corpse GUID -> true: counted once (skinning reopens it); reset at LOOTED_KEEP
 local LOOTED_KEEP = 200
 local looted, lootedCount = {}, 0
 -- Also in dungeons (boss loot); secret values are skipped
 D.On("LOOT_OPENED", function()
     if not D.world then return end
-    local counted = {} -- npcID -> true: this corpse's NPC counted
+    local skip = GetTime() < notDropsUntil
+    notDropsUntil = 0
+    if skip then return end
+    local counted, npcs = {}, {} -- corpse GUID -> true: counted in this window; npcID -> true
     for slot = 1, GetNumLootItems() do
         local link = GetLootSlotLink(slot)
         local itemID = not Secret(link) and D.ItemIDFromLink(link) or nil
@@ -404,15 +438,16 @@ D.On("LOOT_OPENED", function()
                     if lootedCount >= LOOTED_KEEP then wipe(looted) lootedCount = 0 end
                     looted[guid], lootedCount = true, lootedCount + 1
                     learned.loots = (learned.loots or 0) + 1
-                    counted[npcID] = true
+                    counted[guid], npcs[npcID] = true, true
                 end
-                if itemID and counted[npcID] then
+                -- an item of a corpse counted earlier (area loot) is not counted again
+                if itemID and counted[guid] then
                     learned.drops = learned.drops or {}
                     learned.drops[itemID] = (learned.drops[itemID] or 0) + 1
                 end
             end
         end
     end
-    for npcID in pairs(counted) do ApplyDrops(npcID, D.world.npcs[npcID]) end
-    if next(counted) then D.BumpState("npcs") end
+    for npcID in pairs(npcs) do ApplyDrops(npcID, D.world.npcs[npcID]) end
+    if next(npcs) then D.BumpState("npcs") end
 end)
