@@ -166,7 +166,12 @@ function D.BuildMissing()
             if domain.background then
                 D.Rebuild(domain.key)
             else
-                BuildDomain(domain, D.NoPause)
+                -- no pause, so no yield: a failing collect is reported once and not built again
+                local ok, err = pcall(BuildDomain, domain, D.NoPause)
+                if not ok then
+                    failed["domain:" .. domain.key] = true
+                    geterrorhandler()(err)
+                end
             end
         end
     end

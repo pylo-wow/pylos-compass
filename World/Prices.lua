@@ -121,7 +121,7 @@ local function WindowItems()
         local secret = D.Secret(price) or D.Secret(quantity) or D.Secret(available) or D.Secret(extended)
         if itemID and not secret and price and price > 0 and not extended then
             list[#list + 1] = { itemID = itemID, price = price, quantity = math.max(quantity or 1, 1),
-                limited = (available or -1) > 0 }
+                limited = (available or -1) >= 0 }
         end
     end
     return list
