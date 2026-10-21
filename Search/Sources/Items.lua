@@ -104,7 +104,6 @@ ns.RegisterSource({
     key = "items",
     domain = "items",
     name = L["Items"],
-    hint = L["Search items"],
     emptyHint = HINT,
     icon = "Interface\\Icons\\INV_Misc_Bag_08",
     iconAtlas = "bags-up-c60", -- WoW Forever's backpack of the bag bar (icon is the fallback)

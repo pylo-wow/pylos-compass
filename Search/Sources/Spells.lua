@@ -93,7 +93,6 @@ source = ns.RegisterSource({
     key = "spells",
     domain = "spells",
     name = L["Spells"],
-    hint = L["Search spells"],
     icon = symbolFile or "Interface\\Icons\\INV_Misc_Book_09",
     iconAtlas = symbolAtlas,
     actionLabel = L["cast"],

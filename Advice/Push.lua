@@ -11,7 +11,8 @@ local D = ns.data
 -- Levels (Toast.lua): 1 quiet (button glow, tab dot), 2 note (short message by the minimap, at a moment), 3 alert (the
 -- same message with a sound, shown at once unless in a fight or on a flight). Options: per rule off, quiet, note or alert
 -- (its default is the rule's level); a candidate may only lower it (bags: quiet while the bags are not yet full). One
--- lower when 2 of the last 3 were ignored/"Later"; quiet over budget. "Never for this" switches the rule off.
+-- lower for each step of the rule's mood and while messages wave away in a row (Mood, Tire below); quiet over
+-- budget. "Never for this" switches the rule off.
 -- While push.trace is set (developer tools, tests), every decision, near miss (one gate failed) and outcome goes to
 -- ns.Log (a no-op unless something replaces it) and to push.history.
 --   ns.RegisterPush(rule): rule = { key, label, level, topic (tab for the dot, or nil), states (State names to
@@ -575,12 +576,18 @@ end
 function push.Prune()
     local now = time()
     for _, saved in pairs(ns.db.pushes) do
-        saved.outcomes = nil -- the earlier, simpler memory
         for rule, record in pairs(saved.mood or {}) do -- a mood that has faded is forgotten
             if math.abs(D.Decay(record[1], now - record[2], MOOD_HALF_LIFE)) < 0.05 then saved.mood[rule] = nil end
         end
         for situation, at in pairs(saved.at or {}) do
             if now - at > AGAIN then saved.at[situation] = nil end
         end
+    end
+end
+
+-- forget how you answered the messages, for every character (the reset of what the recommendations learned)
+function push.ForgetMood()
+    for _, saved in pairs(ns.db.pushes) do
+        if saved.mood then wipe(saved.mood) end
     end
 end

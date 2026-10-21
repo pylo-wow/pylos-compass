@@ -63,19 +63,9 @@ local function AdviceOff()
     BothOff()
 end
 
--- Saved shape 2: the level of each kind of hint (options "nudge_<rule>") replaced the on/off switches "push_<rule>" and
--- the three level switches. A kind that was switched off stays off; the level switches are gone.
-local function HintLevels(db)
-    for _, rule in ipairs(advice.push.rules) do
-        if db["push_" .. rule.key] == false then db["nudge_" .. rule.key] = "off" end
-        db["push_" .. rule.key] = nil
-    end
-    db.pushQuiet, db.pushMedium, db.pushLoud = nil, nil, nil
-end
-
 local options = {
     savedVariable = "PylosCompassDB",
-    schema = { version = 2, migrations = { [2] = HintLevels } },
+    schema = { version = 2 },
     title = "Pylos Compass",
     intro = L["Search for anything in the game and see what is worth doing next."],
     icon = "Interface\\AddOns\\PylosCompass\\Button.tga",
@@ -102,12 +92,12 @@ local options = {
 
     { type = "checkbox", key = "searchOn", label = L["Enable search"], default = true, onChange = SearchSwitched,
       -- the shared game data is built either way (the recommendations need it too)
-      tooltip = L["The search bar: a key opens it, type a few letters, Enter uses the result. Switched off, the " ..
-          "bar stays closed and its lists are dropped; the game data stays loaded."] },
+      tooltip = L["The search bar: a key opens it, type a few letters, Enter opens a result, Ctrl+Enter uses it. " ..
+          "Switched off, the bar stays closed and its lists are dropped; the game data stays loaded."] },
     { type = "checkbox", key = "adviceOn", label = L["Enable recommendations"], default = true,
       onChange = AdviceSwitched,
       tooltip = L["The window with what is worth doing next, and the hints. Switched off, the window and hints " ..
-          "stay away; the game data stays loaded."] },
+          "do not appear; the game data stays loaded."] },
 }
 local function Add(entries)
     for _, entry in ipairs(entries) do options[#options + 1] = entry end
@@ -131,7 +121,7 @@ options[#options + 1] = { type = "slider", key = "adviceScale", label = L["Recom
     tooltip = L["The size of the recommendations window and the hint messages."],
     onChange = ApplyAdviceScale }
 Add(Under({ { type = "button", label = L["Recommendations window"], text = L["Reset position"],
-    tooltip = L["Move the recommendations window back to where it opens by default, below the minimap."],
+    tooltip = L["Move the recommendations window back to where it opens by default, next to the minimap button."],
     func = function() advice.ResetPosition() end } }, "adviceOn"))
 Add(Under({ search.rows.showCategories }, "searchOn"))
 
@@ -151,9 +141,9 @@ options[#options + 1] = { type = "page", label = L["Learning"], entries = {
           "recommendations."] },
     { type = "checkbox", key = "learn", label = L["Learn from what I do"], default = true,
       tooltip = L["Remember what you choose in the search, what you cast, use, buy and turn in, and how you answer " ..
-          "suggestions. Switched off, nothing new is remembered; what is remembered stays until you reset it. " ..
-          "Facts about the game learned while playing (where NPCs stand, what a trainer teaches) are not part " ..
-          "of this."] },
+          "suggestions. Switched off, none of this is remembered any more; what is remembered stays until you " ..
+          "reset it. Facts about the game learned while playing (where NPCs stand, what a trainer teaches) and " ..
+          "the items and zones you have seen are not part of this."] },
     Under({ search.rows.weighting }, "searchOn")[1],
     Under({ advice.rows.reset }, "adviceOn")[1],
 } }
@@ -167,7 +157,7 @@ PylosCompass.ToggleSearch = function()
 end
 PylosCompass.ToggleWindow = advice.ToggleWindow
 
--- the compass art sits a bit up and left of the button's ring at the kit's spot (half a unit, a whole one overshoots)
+-- the compass art sits a bit up and left of the button's ring at the kit's spot: moved by half a unit
 D.On("PLAYER_LOGIN", function()
     local icon = D.minimapButton and D.minimapButton.icon
     if icon then

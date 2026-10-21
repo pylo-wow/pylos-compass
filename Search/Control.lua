@@ -88,7 +88,7 @@ local CLICK_GUARD = 0.2 -- seconds after opening: the click that opened it is no
 local function ClickedOutside()
     if not ui.bar:IsShown() or S.closingAt then return end
     if MouseOverSearch() then
-        -- Keys act on the bar or the detail view (no text field: Space/Enter open its menu).
+        -- Keys act on the bar or the detail view (no text field: Space or Right opens its menu).
         if S.unfocused and (ui.bar:IsMouseOver() or (ui.detail:IsShown() and ui.detail:IsMouseOver())) then
             ns.input.Focus()
         end

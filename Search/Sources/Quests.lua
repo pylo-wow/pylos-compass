@@ -223,7 +223,6 @@ ns.RegisterSource({
     key = "quests",
     domain = "quests",
     name = L["Quests"],
-    hint = L["Search quests"],
     emptyHint = L["Type to search, or pick a filter."],
     icon = "Interface\\Icons\\INV_Misc_Book_08",
     iconPart = QUEST_PART,

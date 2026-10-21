@@ -136,7 +136,7 @@ local function BuildSource(source, Pause)
         extraWords = extraWords, extraOf = extraOf, extraText = extraText,
         byID = source.maps[1], byNPC = source.maps[2], byEntryID = source.maps[3] }
 end
-ns.index.Build = BuildSource
+ns.index.Build = BuildSource -- (PylosDev's memory tool)
 
 -- Big sources are built in the data layer's background builder (one time budget per frame), after their domain.
 local function RefreshOpen()

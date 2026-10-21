@@ -3,7 +3,7 @@ local L = ns.L
 local D = ns.data
 
 -- Professions: the recipes of every profession, with the profession on the right. Learned ones show
--- (Enter casts them); the others are hidden: typing finds those of your professions (greyed, with the
+-- (Ctrl+Enter casts them); the others are hidden: typing finds those of your professions (grayed, with the
 -- skill they need), a filter like "Available" shows the ones you can learn now. Entries and recipe facts
 -- come from the data layer (World\Professions.lua); here only how they are shown.
 
@@ -186,7 +186,6 @@ source = ns.RegisterSource({
     key = "professions",
     domain = "professions",
     name = L["Professions"],
-    hint = L["Search professions"],
     icon = 2447783, -- the crossed tools of WoW Forever's character window tabs (seen in game)
     actionLabel = L["cast"],
     owned = function(entry) return not entry.hidden end,

@@ -373,9 +373,8 @@ function D.RecipeSkillColor(entry)
 end
 
 -- Chance 0..1 that making a learned recipe raises your skill: sure up to the yellow rank, then
--- falling linearly to none at the grey rank. Blizzard never published the numbers (only orange
--- 100 % and grey 0 % are certain); this is the emulators' CraftSkillGainChance formula
--- (AzerothCore, PlayerUpdates.cpp). Nil as the color.
+-- falling linearly to none at the grey rank. An estimate: Blizzard never published the numbers (only orange
+-- 100 % and grey 0 % are certain). Nil as the color.
 function D.RecipeSkillChance(entry)
     if not D.RecipeSkillColor(entry) then return nil end
     local rank = D.ProfessionRanks()[entry.skillLine]

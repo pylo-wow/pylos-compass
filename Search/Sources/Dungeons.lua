@@ -112,7 +112,6 @@ source = ns.RegisterSource({
     key = "dungeons",
     domain = "dungeons",
     name = L["Dungeons & raids"],
-    hint = L["Search dungeons and raids"],
     icon = symbolFile or "Interface\\Icons\\INV_Misc_Key_03",
     iconAtlas = symbolAtlas or "ui-hud-micromenu-groupfinder-up-c60-2x",
     browse = Browse,

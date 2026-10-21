@@ -54,7 +54,7 @@ ns.state = {
 -- Sources: each a category of entries with its own index (the fields in the order registrations list them).
 --   key         unique; names the option "source_<key>"
 --   domain      domain of the data layer ("items", "npcs", ...): it builds and rebuilds the entries, the index follows
---   name, hint  shown name; hint in its search ("Search spells")
+--   name        shown name
 --   emptyHint   text of an empty list opened without text; optional
 --   icon        tab symbol; iconAtlas instead; iconPart { file, left, right, top, bottom }; icon stays the fallback
 --   actionLabel detail view action name, lower case ("cast"; follows "Ctrl+Enter:")

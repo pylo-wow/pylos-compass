@@ -274,7 +274,6 @@ ns.RegisterSource({
     key = "npcs",
     domain = "npcs",
     name = L["NPCs"],
-    hint = L["Search NPCs"],
     emptyHint = L["Nobody useful near you. Type a name."],
     icon = (function()
         -- a portrait of your own race (Achievement_Character_<race>_<sex>, the

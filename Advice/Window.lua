@@ -3,7 +3,7 @@ local D = ns.data
 local L = ns.L
 local W = ns.widgets -- shared with the search window
 
--- Recommendations window (minimap middle click or key), built from the widgets shared with the search (Widgets.lua).
+-- Recommendations window (minimap left click or key), built from the widgets shared with the search (Widgets.lua).
 --   tabs: one per topic (Reasons.lua), always one set (no all-in-one list: what is important now comes as a nudge,
 --   Push.lua). Each counts its suggestions; empty ones are dimmed; close tab at the right end.
 --   subtopics: side tabs (Subtopics.lua, W.SideTabs); the set one narrows the list, clicking it again clears it.
@@ -663,7 +663,9 @@ local function Build()
         tab:SetScript("OnEnter", function(self)
             tip:SetOwner(self, "ANCHOR_TOP")
             tip:SetText(info.name, W.WHITE[1], W.WHITE[2], W.WHITE[3])
-            tip:AddLine(L["%d suggestions"]:format(self.count or 0), W.SUB[1], W.SUB[2], W.SUB[3])
+            local count = self.count or 0
+            tip:AddLine((count == 1 and L["%d suggestion"] or L["%d suggestions"]):format(count),
+                W.SUB[1], W.SUB[2], W.SUB[3])
             tip:Show()
         end)
         tab:SetScript("OnLeave", function() tip:Hide() end)
@@ -837,7 +839,7 @@ ns.On("PLAYER_REGEN_DISABLED", function()
     if window and window:IsShown() then window.Close(true) end
 end)
 
--- the minimap button's middle click and the key (Options.lua)
+-- the minimap button's left click and the key (Options.lua)
 function ns.ToggleWindow()
     if not ns.db then return end
     if ns.db.adviceOn == false then

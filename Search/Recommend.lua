@@ -1,5 +1,4 @@
 local ns = select(2, ...).search
-local L = ns.L
 
 -- ns.rec: the engine (D.engine, API in Engine\API.lua) as the search uses it. Calls about a suggestion ask for
 -- the kind "know": what you would want to look up now (target, fresh loot, a new zone, your quests' items,

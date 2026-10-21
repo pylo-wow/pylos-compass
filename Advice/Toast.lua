@@ -274,7 +274,7 @@ function push.ShowQuiet()
     newest.seen = true
     push.QuietChanged()
     push.Toast(rule, newest.c, push.QUIET)
-    return situation ~= nil
+    return true
 end
 
 -- The left click of the minimap button: a quiet nudge to show first, else the recommendations window

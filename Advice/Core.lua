@@ -19,7 +19,7 @@ ns.options = {
         windowTab = "",    -- "": first tab with suggestions
         windowSub = {},    -- topic -> subtopic key
         window = {},       -- left, top
-        pushes = {},       -- per character: nudge situations and outcomes
+        pushes = {},       -- per character: when each situation was hinted, and the mood per hint kind
     },
     onLoad = function()
         ns.push.Prune()
@@ -36,6 +36,7 @@ StaticPopupDialogs["PYLOSCOMPASS_RESET_LEARNING"] = {
     OnAccept = function()
         ns.memory.ForgetDone()
         ns.learning.Forget("do")
+        ns.push.ForgetMood()
     end,
     timeout = 0,
     whileDead = true,
