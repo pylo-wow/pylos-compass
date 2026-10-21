@@ -5,7 +5,9 @@ local _, D = ...
 --   D.search   the search's namespace   D.advice   the recommendations' namespace
 -- A part reads the kit's names from the root and, for the recommendations, the engine's names as its own.
 
--- The global API: Options.lua fills in the rest, Bindings.xml calls it; internal is the root D, for developer tools.
+-- The global API: Options.lua fills in the rest, Bindings.xml calls it.
+-- shortcut: internal exposes the whole root namespace because PylosDev (private) and the tests read it; narrow it to
+-- the few names they use if another addon ever depends on it.
 PylosCompass = { API = 1, internal = D }
 
 local KIT = { L = true, db = true, kit = true, widgets = true, SetOption = true, minimapButton = true,

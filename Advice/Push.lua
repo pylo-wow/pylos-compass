@@ -13,8 +13,6 @@ local D = ns.data
 -- (its default is the rule's level); a candidate may only lower it (bags: quiet while the bags are not yet full). One
 -- lower for each step of the rule's mood and while messages wave away in a row (Mood, Tire below); quiet over
 -- budget. "Never for this" switches the rule off.
--- While push.trace is set (developer tools, tests), every decision, near miss (one gate failed) and outcome goes to
--- ns.Log (a no-op unless something replaces it) and to push.history.
 --   ns.RegisterPush(rule): rule = { key, label, level, topic (tab for the dot, or nil), states (State names to
 --   re-evaluate on), ownBudget, holdFor (seconds a candidate must have been there before it nudges), resolved()
 --   (true when what it nudged about is over: the next time nudges again), candidates(add) }
@@ -26,15 +24,12 @@ ns.push = push
 
 local QUIET, MEDIUM, ALERT = 1, 2, 3 -- MEDIUM is the note
 push.QUIET, push.MEDIUM, push.ALERT = QUIET, MEDIUM, ALERT
-local LEVEL_NAMES = { "quiet", "note", "alert" }
-push.LEVEL_NAMES = LEVEL_NAMES
 local NOTE_EVERY = 15 * 60
 local AGAIN = 24 * 3600     -- seconds before the same situation may nudge again
 local LATER = 10 * 60       -- seconds "Later" holds
 local FOLLOW = 30 * 60      -- seconds a shown nudge waits to be followed
 local MOMENT = 30           -- seconds a pause lasts after its event
 local JUST_DONE = 30 * 60   -- an entry acted on within this is not new
-local HISTORY = 80          -- decisions kept in push.history
 local MAX_SESSION = 500     -- entries in pushedAt / nearLogged before they restart
 
 local rules, byKey = {}, {}
@@ -56,7 +51,6 @@ local quiet = {}      -- situation -> { topic, rule key, at }
 push.quiet = quiet    -- shared with Toast.lua; do not replace
 local shown = {}      -- nudges shown, watched for being followed
 local lastAt = { [MEDIUM] = 0, [ALERT] = 0 }
-push.history = {}     -- the latest decisions, newest first; filled only while push.trace is set (dev tools, tests)
 
 function ns.RegisterPush(rule)
     rules[#rules + 1] = rule
@@ -74,7 +68,14 @@ local function Enabled(rule)
     return ns.db and ns.db.push ~= false and push.Style(rule) > 0
 end
 
--- Log and history (only while push.trace is set)
+-- Developer log: while push.trace is set (by PylosDev) every decision, near miss (one gate failed) and outcome goes
+-- to ns.Log and to push.history. Releases strip what lies between the markers, and Note then does nothing.
+local function Note() end
+--@debug@
+local LEVEL_NAMES = { "quiet", "note", "alert" }
+push.LEVEL_NAMES = LEVEL_NAMES
+local HISTORY = 80 -- decisions kept in push.history
+push.history = {} -- the latest decisions, newest first
 
 local function Gates(c, moment)
     local parts = {}
@@ -87,7 +88,7 @@ local function Gates(c, moment)
     return table.concat(parts, " ")
 end
 
-local function Note(outcome, rule, c, level, moment, extra)
+Note = function(outcome, rule, c, level, moment, extra)
     if not push.trace then return end
     local id = c and c.entry and D.EntryID(c.entry) or "-"
     local gates = c and Gates(c, moment) or ""
@@ -97,6 +98,7 @@ local function Note(outcome, rule, c, level, moment, extra)
         name = c and (c.entry and c.entry.name or c.title) or "", level = level, gates = gates, extra = extra })
     push.history[HISTORY + 1] = nil
 end
+--@end-debug@
 
 -- Saved per character: situations nudged (time) and how receptive you are to each rule (mood)
 local function Saved()
@@ -155,7 +157,7 @@ function push.Steps(rule)
     return steps
 end
 
--- the score now (developer tools, tests)
+-- the score now (for the log)
 function push.Score(rule)
     local record = Mood(rule.key)
     return record and record[1] or 0
