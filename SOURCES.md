@@ -76,15 +76,9 @@ all of them.
 
 ## Carbonite (zone connections)
 
-`Data\Paths.lua`, the walkable crossings between zones, are taken from
-Carbonite's zone connections for WoW Forever:
-[IrcDirk/Carbonite-All-in-One-Retail-Classic](https://github.com/IrcDirk/Carbonite-All-in-One-Retail-Classic),
-`Carbonite/Data/camelot/ZoneConnections.lua`, commit 5c7646f022 (2026-09-25),
-licensed GPL-3.0-or-later, converted to world yards with the client's
-UiMapAssignment. Carbonite is Copyright (C) 2007-2012 Carbon Based
-Creations, LLC, and the Carbonite contributors; it is free software under
-the GNU General Public License, version 3 or (at your option) any later
-version. Thanks to the Carbonite authors.
+`Data\Paths.lua`, the walkable crossings between zones and which side may take a transport, is taken from
+[Carbonite](https://github.com/IrcDirk/Carbonite-All-in-One-Retail-Classic) (`Carbonite/Data/camelot/ZoneConnections.lua`,
+commit 5c7646f022, 2026-09-25), licensed under the GNU General Public License, version 3.
 
 ## WhatsTraining (class trainers)
 

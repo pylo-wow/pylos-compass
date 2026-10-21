@@ -5,11 +5,8 @@ local _, D = ...
 -- these). Made by
 -- gen_paths.ps1 from Carbonite's zone connections for WoW Forever:
 --   IrcDirk/Carbonite-All-in-One-Retail-Classic, Carbonite/Data/camelot/ZoneConnections.lua, commit 5c7646f022 (2026-09-25)
--- Carbonite is free software under the GNU General Public License v3
--- (https://www.gnu.org/licenses/gpl-3.0.html); these crossings are taken from
--- it, converted to world yards with the client's UiMapAssignment (wago.tools,
--- build 1.60.1.70450). Do not edit. Thanks to
--- the Carbonite authors.
+-- Carbonite is licensed under the GNU General Public License, version 3. Converted to world yards with
+-- the client's UiMapAssignment (wago.tools, build 1.60.1.70450). Do not edit.
 -- 58 crossings on foot, 2 portals; transports' factions for 12 transports.
 
 -- flat, groups of 10: zone A (uiMapID), continent, x, y, zone B, continent, x, y
