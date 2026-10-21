@@ -4,7 +4,7 @@
 ## Notes: Search for your spells and all items, recipes, NPCs, dungeons and quests of the game, and see what is worth doing next.
 ## Author: Pylo
 ## Version: 0.1.0
-## X-License: GPL-3.0-or-later
+## X-License: GPL-3.0-only
 ## OptionalDeps: PylosGatherInfo
 ## SavedVariables: PylosCompassDB, PylosCompassWorldDB, PylosCompassEngineDB
 ## IconTexture: Interface\AddOns\PylosCompass\Icon.tga

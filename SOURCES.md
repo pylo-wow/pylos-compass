@@ -1,7 +1,7 @@
 # Pylos Compass: sources
 
 Pylos Compass is free software under the GNU General Public License, version 3
-or (at your option) any later version (`LICENSE`). Its data files (`Data\`)
+(`LICENSE`). Its data files (`Data\`)
 are generated from the sources below by scripts kept outside the addon; the
 header of each file names its own sources.
 

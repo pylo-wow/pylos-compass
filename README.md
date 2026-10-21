@@ -41,4 +41,4 @@ For WoW Forever (Interface 16001). Needs no other addon. Pylos GatherInfo is opt
 
 ## License
 
-GPL-3.0-or-later. Where the data comes from is listed in `SOURCES.md`. World of Warcraft and its data belong to Blizzard Entertainment; this addon is not made or endorsed by Blizzard.
+GPL-3.0-only. Where the data comes from is listed in `SOURCES.md`. World of Warcraft and its data belong to Blizzard Entertainment; this addon is not made or endorsed by Blizzard.
