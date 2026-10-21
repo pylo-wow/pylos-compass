@@ -47,13 +47,13 @@ function D.PlayerSpec()
 end
 
 -- Melee hit %, spell hit % and defense skill (base + bonus) from gear and talents;
--- 0 where the client gives none or the value is secret (in combat in Forever)
-local function Number(value)
-    if D.Secret(value) or not value then return 0 end
-    return value
-end
+-- While the client hides them (secret, in combat in Forever) the last readable ones count, 0 before the first:
+-- zeros would give the caps full room and value hit and defense gear as if you wore none.
+local last = { hit = 0, spellHit = 0, defense = 0 }
 function D.PlayerRatings()
     local base, bonus = UnitDefenseSkill("player")
-    return { hit = Number(GetHitModifier()), spellHit = Number(GetSpellHitModifier()),
-        defense = Number(base) + Number(bonus) }
+    local hit, spellHit = GetHitModifier(), GetSpellHitModifier()
+    if D.Secret(base) or D.Secret(bonus) or D.Secret(hit) or D.Secret(spellHit) then return last end
+    last = { hit = hit or 0, spellHit = spellHit or 0, defense = (base or 0) + (bonus or 0) }
+    return last
 end

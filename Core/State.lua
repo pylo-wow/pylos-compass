@@ -143,11 +143,14 @@ polls.position = function()
 end
 -- same calls as D.PlayerRatings without its table; hit and spell hit are percents below 100, so the three fit one
 -- number
+-- (secret: the last readable number, so the state does not change when the client hides the values)
+local lastRatings = 0
 polls.ratings = function()
     local hit, spellHit = GetHitModifier(), GetSpellHitModifier()
     local base, bonus = UnitDefenseSkill("player")
-    if D.Secret(base) or D.Secret(bonus) or D.Secret(hit) or D.Secret(spellHit) then return -1 end
-    return (hit or 0) + (spellHit or 0) * 1000 + ((base or 0) + (bonus or 0)) * 1000000
+    if D.Secret(base) or D.Secret(bonus) or D.Secret(hit) or D.Secret(spellHit) then return lastRatings end
+    lastRatings = (hit or 0) + (spellHit or 0) * 1000 + ((base or 0) + (bonus or 0)) * 1000000
+    return lastRatings
 end
 -- worn items as one number: each slot's item ID times its own prime, so a change in any slot changes the sum
 local PRIMES = { [0] = 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71 }
